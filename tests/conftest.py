@@ -20,6 +20,7 @@ def make_settings(**overrides: Any) -> Settings:
         "cache_ttl_seconds": 0,
         "negative_cache_ttl_seconds": 0,
         "http_timeout": 2.0,
+        "http_min_interval_seconds": 0.0,
         "max_concurrency": 1,
         "semantic_scholar_api_key": None,
         "openalex_api_key": None,
