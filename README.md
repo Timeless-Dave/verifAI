@@ -52,7 +52,7 @@ make run
 
 Then open [http://127.0.0.1:8741](http://127.0.0.1:8741). After uv itself is installed, those two commands are the setup.
 
-`make test` runs the unit tests. They mock HTTP and do not call the public APIs.
+`make test` runs the unit tests and fails if coverage of `src/verifai` drops below 85%. The tests mock HTTP and do not call the public APIs.
 
 Useful equivalents:
 

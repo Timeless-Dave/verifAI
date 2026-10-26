@@ -68,7 +68,16 @@ disallow_untyped_defs = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q --cov=verifai --cov-report=term-missing --cov-fail-under=85"
+
+[tool.coverage.run]
+source = ["src/verifai"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 85
 
 [tool.ruff]
 target-version = "py311"
