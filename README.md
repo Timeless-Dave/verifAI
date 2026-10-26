@@ -144,10 +144,16 @@ The process User-Agent looks like `VerifAI/0.1.0 (mailto:you@example.com)`.
 ## Tests and CI
 
 ```bash
+make lint
+make typecheck
 make test
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the same pytest suite on push and pull request. Tests do not touch the network. Provider payloads in `tests/fakes.py` follow the JSON shapes returned by doi.org, Crossref, OpenAlex, and DataCite.
+`make lint` runs ruff. `make typecheck` runs mypy in strict mode. `make test` runs pytest and fails if branch coverage of `src/verifai` drops below 85%.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs those three checks on Python 3.11, 3.12, and 3.13 for every push and pull request. Tests do not touch the network. Provider payloads in `tests/fakes.py` follow the JSON shapes returned by doi.org, Crossref, OpenAlex, and DataCite.
+
+`pre-commit install` runs the same ruff and mypy checks on each commit. The hooks call `uv run`, so `make install` has to have succeeded first.
 
 ## Known limitations
 

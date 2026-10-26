@@ -8,6 +8,6 @@
 
 ## How you tested
 
+- [ ] `make lint`
+- [ ] `make typecheck`
 - [ ] `make test`
-- [ ] `uv run ruff check .` and `uv run ruff format --check .`
-- [ ] `uv run mypy`

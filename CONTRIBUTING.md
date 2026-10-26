@@ -22,11 +22,12 @@ make run
 ## Checks
 
 ```bash
+make lint
+make typecheck
 make test
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy
 ```
+
+`make lint` is `ruff check` and `ruff format --check`. `make typecheck` is `mypy` in strict mode. `make test` fails if branch coverage of `src/verifai` drops below 85%. `pre-commit install` runs the ruff and mypy hooks.
 
 Tests mock HTTP. They do not call the public APIs. `mypy` runs in strict mode. Ruff uses the rule set in `pyproject.toml`.
 
