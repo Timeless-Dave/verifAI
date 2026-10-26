@@ -1,9 +1,19 @@
-"""Evidence providers used by the citation expert.
+"""Evidence providers used by the citation expert."""
 
-Record types live here first. Client classes are exported once each
-provider module exists, so this package can be imported on its own.
-"""
+from verifai.experts.citation.providers.crossref import CrossrefProvider
+from verifai.experts.citation.providers.datacite import DataCiteProvider
+from verifai.experts.citation.providers.doi_org import DoiOrgProvider
+from verifai.experts.citation.providers.openalex import OpenAlexProvider
+from verifai.experts.citation.providers.semantic_scholar import SemanticScholarProvider
+from verifai.experts.citation.providers.url_check import UrlLivenessProvider
+from verifai.experts.citation.providers.wayback import WaybackProvider
 
-from verifai.experts.citation.providers.base import ProviderOutcome, Record, UrlCheck, WaybackHit
-
-__all__ = ["ProviderOutcome", "Record", "UrlCheck", "WaybackHit"]
+__all__ = [
+    "CrossrefProvider",
+    "DataCiteProvider",
+    "DoiOrgProvider",
+    "OpenAlexProvider",
+    "SemanticScholarProvider",
+    "UrlLivenessProvider",
+    "WaybackProvider",
+]
