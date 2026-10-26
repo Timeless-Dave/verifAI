@@ -6,7 +6,9 @@ import hashlib
 import json
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -29,7 +31,7 @@ class HttpResult:
     def ok(self) -> bool:
         return self.error is None and self.status_code is not None and 200 <= self.status_code < 300
 
-    def json_body(self) -> dict | list | None:
+    def json_body(self) -> dict[str, Any] | list[Any] | None:
         if not self.content:
             return None
         try:
@@ -108,7 +110,7 @@ class PoliteHttp:
         self,
         url: str,
         *,
-        params: dict | None = None,
+        params: Mapping[str, Any] | None = None,
         headers: dict[str, str] | None = None,
     ) -> HttpResult:
         accept = (headers or {}).get("Accept", "")
@@ -147,7 +149,7 @@ class PoliteHttp:
         method: str,
         url: str,
         *,
-        params: dict | None,
+        params: Mapping[str, Any] | None,
         headers: dict[str, str] | None,
     ) -> HttpResult:
         attempts = self.settings.http_retries + 1
@@ -178,7 +180,7 @@ class PoliteHttp:
         method: str,
         url: str,
         *,
-        params: dict | None,
+        params: Mapping[str, Any] | None,
         headers: dict[str, str] | None,
     ) -> HttpResult:
         try:
@@ -245,14 +247,14 @@ def _from_response(response: httpx.Response, content: bytes | None = None) -> Ht
     )
 
 
-def _clean_params(params: dict | None) -> dict | None:
+def _clean_params(params: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
     if not params:
         return None
     cleaned = {key: value for key, value in params.items() if value is not None and value != ""}
     return cleaned or None
 
 
-def _cache_key(method: str, url: str, params: dict | None, accept: str) -> str:
+def _cache_key(method: str, url: str, params: Mapping[str, Any] | None, accept: str) -> str:
     payload = json.dumps(
         {"m": method, "u": url, "p": _clean_params(params) or {}, "a": accept},
         sort_keys=True,

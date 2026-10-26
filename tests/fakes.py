@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import unquote
 
 import httpx
@@ -28,7 +29,7 @@ ATTENTION_AUTHORS = [
 
 
 def install(
-    router,
+    router: Any,
     *,
     doi_org_down: bool = False,
     openalex_down: bool = False,
@@ -138,20 +139,20 @@ def _datacite_year(query: str) -> int | None:
 
 
 def _filter_title(request: httpx.Request) -> str:
-    raw = request.url.params.get("filter", "")
+    raw = str(request.url.params.get("filter", ""))
     if "title.search:" in raw:
         return raw.split("title.search:", 1)[1]
-    return request.url.params.get("query.title", "")
+    return str(request.url.params.get("query.title", ""))
 
 
-def _search_items(request: httpx.Request) -> list[dict]:
+def _search_items(request: httpx.Request) -> list[dict[str, Any]]:
     return [
         _crossref_item(record)
         for record in _search_records(request.url.params.get("query.title", ""))
     ]
 
 
-def _search_records(title: str) -> list[dict]:
+def _search_records(title: str) -> list[dict[str, Any]]:
     folded = title.casefold()
     if "attention is all you need" in folded:
         modern = _record(
@@ -199,7 +200,7 @@ def _search_records(title: str) -> list[dict]:
     return []
 
 
-def _known_doi(doi: str) -> dict | None:
+def _known_doi(doi: str) -> dict[str, Any] | None:
     lowered = doi.lower()
     if FAKE_DOI in lowered:
         return None
@@ -224,11 +225,13 @@ def _known_doi(doi: str) -> dict | None:
     return None
 
 
-def _record(doi: str, title: str, authors: list[str], year: int, venue: str | None) -> dict:
+def _record(
+    doi: str, title: str, authors: list[str], year: int, venue: str | None
+) -> dict[str, Any]:
     return {"doi": doi, "title": title, "authors": authors, "year": year, "venue": venue}
 
 
-def _crossref_item(record: dict) -> dict:
+def _crossref_item(record: dict[str, Any]) -> dict[str, Any]:
     item = {
         "DOI": record["doi"],
         "title": [record["title"]],
@@ -249,7 +252,7 @@ def _crossref_item(record: dict) -> dict:
     return item
 
 
-def _csl(record: dict) -> dict:
+def _csl(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "DOI": record["doi"],
         "title": record["title"],
@@ -262,7 +265,7 @@ def _csl(record: dict) -> dict:
     }
 
 
-def _datacite_item(record: dict) -> dict:
+def _datacite_item(record: dict[str, Any]) -> dict[str, Any]:
     creators = []
     for name in record["authors"]:
         parts = name.split()
@@ -285,7 +288,7 @@ def _datacite_item(record: dict) -> dict:
     }
 
 
-def _openalex(record: dict) -> dict:
+def _openalex(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": f"https://openalex.org/W{abs(hash(record['doi'])) % 10_000_000}",
         "doi": f"https://doi.org/{record['doi']}",

@@ -52,6 +52,19 @@ only-include = ["src/verifai"]
 "src/verifai/web/templates" = "verifai/web/templates"
 "src/verifai/web/static" = "verifai/web/static"
 
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/verifai", "tests"]
+mypy_path = "src"
+explicit_package_bases = true
+warn_unreachable = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

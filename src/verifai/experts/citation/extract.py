@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import urlparse
 
 from verifai.experts.citation.textnorm import word_count
@@ -255,7 +256,7 @@ def _find_references(text: str) -> list[ExtractedCitation]:
     return _drop_overlaps(found)
 
 
-def _parse_bibliographic(line: str) -> dict:
+def _parse_bibliographic(line: str) -> dict[str, Any]:
     """Best-effort metadata for a line that already has a DOI or URL."""
     cleaned = _URL_RE.sub(" ", line)
     cleaned = _DOI_RE.sub(" ", cleaned)
@@ -378,9 +379,10 @@ def _normalize(text: str) -> str:
 
 
 def _dedupe(items: list[ExtractedCitation]) -> list[ExtractedCitation]:
-    seen: set[tuple] = set()
+    seen: set[tuple[str, str] | tuple[str, str, int]] = set()
     kept: list[ExtractedCitation] = []
     for item in items:
+        key: tuple[str, str] | tuple[str, str, int]
         if item.kind == "doi" and item.doi:
             key = ("doi", item.doi.lower())
         elif item.kind == "url" and item.url:

@@ -5,9 +5,10 @@ from __future__ import annotations
 import ipaddress
 import socket
 from collections.abc import Callable
+from typing import Any
 from urllib.parse import urlparse
 
-Resolver = Callable[..., list]
+Resolver = Callable[..., list[Any]]
 
 
 def public_url_problem(url: str, *, resolve: Resolver = socket.getaddrinfo) -> str | None:

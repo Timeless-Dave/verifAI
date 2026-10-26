@@ -1,3 +1,5 @@
+from typing import Any
+
 import httpx
 import respx
 from tests.conftest import make_settings
@@ -10,7 +12,7 @@ def test_user_agent_retries_and_cache():
         _assert_user_agent_retries_and_cache(respx_mock)
 
 
-def _assert_user_agent_retries_and_cache(respx_mock):
+def _assert_user_agent_retries_and_cache(respx_mock: Any) -> None:
     route = respx_mock.get("https://api.crossref.org/works").mock(
         side_effect=[
             httpx.Response(503, text="busy"),

@@ -518,7 +518,7 @@ def _score_all(query: Query, outcomes: list[ProviderOutcome]) -> list[_Scored]:
     return scored
 
 
-def _rank(item: _Scored) -> tuple:
+def _rank(item: _Scored) -> tuple[int, float, int]:
     status_rank = 2 if item.assessment.status == CitationStatus.VERIFIED else 1
     return (status_rank, item.assessment.title_blend, -len(item.assessment.mismatches))
 

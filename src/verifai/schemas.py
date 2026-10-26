@@ -6,6 +6,7 @@ recollection of a paper, article, or claim.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import Enum
 from typing import Literal
 
@@ -66,7 +67,7 @@ def source_label(name: str) -> str:
     return SOURCE_LABELS.get(name, name)
 
 
-def ordered_sources(names: list[str]) -> list[str]:
+def ordered_sources(names: Iterable[str]) -> list[str]:
     rank = {name: index for index, name in enumerate(SOURCE_ORDER)}
     unique = list(dict.fromkeys(names))
     return sorted(unique, key=lambda name: (rank.get(name, 100), name))
@@ -114,7 +115,6 @@ class CitationResult(BaseModel):
     matched_url: str | None = None
 
     @computed_field
-    @property
     def status_label(self) -> str:
         return STATUS_LABELS[self.status]
 
@@ -141,7 +141,6 @@ class ExpertResult(BaseModel):
     evidence_principle: str = EVIDENCE_PRINCIPLE
 
     @computed_field
-    @property
     def verdict_label(self) -> str:
         return VERDICT_LABELS[self.verdict]
 

@@ -51,7 +51,8 @@ class CrossrefProvider:
             return ProviderOutcome(
                 self.name, unavailable=True, error="Crossref response was not JSON"
             )
-        items = message.get("items") if isinstance(message.get("items"), list) else []
+        raw_items = message.get("items")
+        items = raw_items if isinstance(raw_items, list) else []
         records = []
         for item in items:
             if not isinstance(item, dict):

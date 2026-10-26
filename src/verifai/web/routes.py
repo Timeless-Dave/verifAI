@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from verifai.sample import EXAMPLE_TEXT
-from verifai.schemas import CheckRequest, CheckResponse, source_label
+from verifai.schemas import CheckRequest, CheckResponse, ExpertResult, source_label
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def build_web_router() -> APIRouter:
         return CheckResponse(results=results)
 
     @router.get("/health")
-    def health(request: Request) -> dict:
+    def health(request: Request) -> dict[str, Any]:
         expert = request.app.state.router.experts[0]
         return {
             "status": "ok",
@@ -90,7 +90,7 @@ def build_web_router() -> APIRouter:
     return router
 
 
-def _run(request: Request, text: str):
+def _run(request: Request, text: str) -> list[ExpertResult]:
     experts = request.app.state.router.select(text)
     if not experts:
         return []
@@ -110,9 +110,12 @@ def _example_json() -> str:
     return json.dumps(EXAMPLE_TEXT).replace("<", "\\u003c")
 
 
-def _render(request: Request, name: str, context: dict, status_code: int = 200) -> HTMLResponse:
+def _render(
+    request: Request, name: str, context: dict[str, Any], status_code: int = 200
+) -> HTMLResponse:
     try:
         return templates.TemplateResponse(request, name, context, status_code=status_code)
     except TypeError:
+        # Starlette before the request-first signature.
         merged = {"request": request, **context}
-        return templates.TemplateResponse(name, merged, status_code=status_code)
+        return templates.TemplateResponse(name, merged, status_code=status_code)  # type: ignore[arg-type]

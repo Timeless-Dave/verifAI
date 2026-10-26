@@ -17,16 +17,20 @@ def test_example_text_finds_real_and_fake_citations():
     assert found[0].surnames[0] == "Vaswani"
     assert "Polosukhin" in found[0].surnames
     assert found[0].title == "Attention is all you need"
+    assert found[0].venue is not None
     assert found[0].venue.startswith("Advances in Neural Information Processing Systems")
     assert found[1].surnames == ["Jinek"]
     assert found[1].et_al is True
     assert found[1].year == 2012
     assert found[1].venue == "Science"
+    assert found[1].title is not None
     assert "endonuclease" in found[1].title.lower()
     assert found[2].doi == "10.1371/journal.pone.0000217"
     assert found[3].surnames == ["Smith", "Doe"]
+    assert found[3].title is not None
     assert "sourdough" in found[3].title.lower()
     assert found[4].doi == "10.1234/verifai.fabricated.2021"
+    assert found[5].url is not None
     assert found[5].url.startswith("https://en.wikipedia.org/")
 
 
@@ -88,4 +92,5 @@ def test_doi_keeps_bibliography_metadata_from_the_same_line():
     assert found[0].doi == "10.1126/science.1225829"
     assert found[0].surnames == ["Smith", "Doe"]
     assert found[0].year == 2019
+    assert found[0].title is not None
     assert "sourdough" in found[0].title.lower()

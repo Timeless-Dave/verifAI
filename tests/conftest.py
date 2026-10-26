@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -10,8 +12,8 @@ from verifai.http import PoliteHttp
 from verifai.main import create_app
 
 
-def make_settings(**overrides) -> Settings:
-    values = {
+def make_settings(**overrides: Any) -> Settings:
+    values: dict[str, Any] = {
         "mailto": "tests@example.com",
         "http_retries": 0,
         "http_backoff_seconds": 0.0,
@@ -23,7 +25,7 @@ def make_settings(**overrides) -> Settings:
         "openalex_api_key": None,
     }
     values.update(overrides)
-    return Settings(**values)
+    return Settings.model_validate(values)
 
 
 @pytest.fixture
