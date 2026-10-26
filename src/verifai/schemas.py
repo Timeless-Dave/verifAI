@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 EVIDENCE_PRINCIPLE = (
     "Verdicts aggregate evidence from multiple independent sources, record "
@@ -145,8 +145,29 @@ class ExpertResult(BaseModel):
         return VERDICT_LABELS[self.verdict]
 
 
+def clean_paste(text: str) -> str:
+    """Strip surrounding space and refuse a null byte.
+
+    The character cap is applied by the route, because it comes from
+    settings. A null byte is rejected here so both the form and the JSON
+    API share one rule.
+    """
+    cleaned = text.strip()
+    if "\x00" in cleaned:
+        raise ValueError("The paste contains a null byte, which VerifAI will not check.")
+    return cleaned
+
+
 class CheckRequest(BaseModel):
     text: str
+
+    @field_validator("text")
+    @classmethod
+    def _clean_text(cls, value: str) -> str:
+        cleaned = clean_paste(value)
+        if not cleaned:
+            raise ValueError("Paste some text first.")
+        return cleaned
 
 
 class CheckResponse(BaseModel):

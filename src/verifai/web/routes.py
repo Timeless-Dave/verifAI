@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from verifai.sample import EXAMPLE_TEXT
-from verifai.schemas import CheckRequest, CheckResponse, ExpertResult, source_label
+from verifai.schemas import CheckRequest, CheckResponse, ExpertResult, clean_paste, source_label
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +98,10 @@ def _run(request: Request, text: str) -> list[ExpertResult]:
 
 
 def _validate(text: str, limit: int) -> tuple[str | None, str]:
-    cleaned = (text or "").strip()
+    try:
+        cleaned = clean_paste(text or "")
+    except ValueError as exc:
+        return str(exc), text or ""
     if not cleaned:
         return "Paste some text first.", ""
     if len(cleaned) > limit:

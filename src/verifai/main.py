@@ -15,6 +15,7 @@ from verifai.config import Settings, get_settings
 from verifai.experts.citation import build_citation_expert
 from verifai.experts.router import Router
 from verifai.http import PoliteHttp
+from verifai.web.limits import BodySizeLimitMiddleware
 from verifai.web.routes import STATIC_DIR, build_web_router
 
 log = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(build_web_router())
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     return app
 
 
