@@ -69,6 +69,7 @@ def test_homepage_and_form_and_json(client, http_mock):
 
     health = client.get("/health")
     assert health.status_code == 200
+    assert health.headers["x-request-id"]
     payload = health.json()
     assert payload["status"] == "ok"
     assert "crossref" in payload["providers"]

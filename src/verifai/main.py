@@ -7,7 +7,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from verifai import __version__
@@ -15,10 +18,33 @@ from verifai.config import Settings, get_settings
 from verifai.experts.citation import build_citation_expert
 from verifai.experts.router import Router
 from verifai.http import PoliteHttp
+from verifai.logging import configure_logging
 from verifai.web.limits import BodySizeLimitMiddleware
+from verifai.web.request_id import RequestIdMiddleware
 from verifai.web.routes import STATIC_DIR, build_web_router
 
 log = logging.getLogger(__name__)
+
+
+def _install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        log.info("rejected %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
+
+    @app.exception_handler(Exception)
+    async def unhandled(request: Request, exc: Exception) -> JSONResponse:
+        log.error(
+            "unhandled %s on %s %s",
+            type(exc).__name__,
+            request.method,
+            request.url.path,
+            exc_info=exc,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "The check failed before it could finish."},
+        )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -50,6 +76,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(build_web_router())
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
+    app.add_middleware(RequestIdMiddleware)
+    _install_error_handlers(app)
+    configure_logging()
     return app
 
 
@@ -57,7 +86,7 @@ app = create_app()
 
 
 def run() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    configure_logging()
     settings = get_settings()
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
 
