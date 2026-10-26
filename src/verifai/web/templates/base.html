@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}VerifAI{% endblock %}</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap masthead-row">
+      <a class="wordmark" href="/">Verif<span>AI</span></a>
+      <p class="masthead-note">Local citation check. No commercial model API.</p>
+    </div>
+  </header>
+  <main class="wrap">
+    {% block body %}{% endblock %}
+  </main>
+  <footer class="wrap site-foot">
+    <p>Verdicts are computed from records retrieved at check time. A language model’s memory is not a source.</p>
+    <p><a href="/docs">API docs</a> · MIT license · htmx is vendored under the Zero-Clause BSD license.</p>
+  </footer>
+</body>
+</html>

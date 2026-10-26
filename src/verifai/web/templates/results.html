@@ -1,0 +1,94 @@
+{% if error %}
+<p class="banner" role="alert">{{ error }}</p>
+{% elif results is not none and results|length == 0 %}
+<p class="banner" role="status">No checker is registered for this paste yet.</p>
+{% elif results %}
+  {% for result in results %}
+  <section class="verdict verdict-{{ result.verdict.value }}" aria-live="polite">
+    <p class="kicker">Citation verdict · {{ result.verdict_label }} · {{ result.confidence|pct }}</p>
+    <p>{{ result.explanation }}</p>
+    {% if result.sources_consulted %}
+    <p class="source-line">
+      Consulted
+      {% for name in result.sources_consulted %}<span class="chip">{{ source_label(name) }}</span>{% endfor %}
+      {% if result.sources_unavailable %}
+        <span class="source-gap">No answer from
+          {% for name in result.sources_unavailable %}<span class="chip chip-gap">{{ source_label(name) }}</span>{% endfor %}
+        </span>
+      {% endif %}
+    </p>
+    {% endif %}
+  </section>
+
+  {% if result.citations %}
+  <div class="table-wrap">
+    <table class="ledger">
+      <caption>Per-citation results</caption>
+      <thead>
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col">Citation</th>
+          <th scope="col">Status</th>
+          <th scope="col">Confidence</th>
+          <th scope="col">Sources</th>
+          <th scope="col">Matched record</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for citation in result.citations %}
+        <tr class="row-{{ citation.status.value }}">
+          <td class="num" data-label="#">{{ loop.index }}</td>
+          <td class="cite" data-label="Citation">
+            <span class="kind">{{ {"doi": "DOI", "url": "URL", "reference": "Reference"}[citation.kind] }}</span>
+            <span class="raw">{{ citation.raw }}</span>
+          </td>
+          <td data-label="Status"><span class="stamp stamp-{{ citation.status.value }}">{{ citation.status_label }}</span></td>
+          <td class="num" data-label="Confidence">{{ citation.confidence|pct }}</td>
+          <td data-label="Sources">
+            {% for name in citation.sources_contributed %}
+              <span class="chip">{{ source_label(name) }}</span>
+            {% else %}
+              <span class="muted">none answered</span>
+            {% endfor %}
+            {% for name in citation.sources_unavailable %}
+              <span class="chip chip-gap">{{ source_label(name) }} down</span>
+            {% endfor %}
+          </td>
+          <td data-label="Matched record">
+            {% if citation.matched_title %}
+              <span class="matched-title">{{ citation.matched_title }}</span>
+              <span class="matched-meta">
+                {% if citation.matched_authors %}{{ citation.matched_authors }}{% endif %}
+                {% if citation.matched_year %} · {{ citation.matched_year }}{% endif %}
+                {% if citation.matched_venue %} · {{ citation.matched_venue }}{% endif %}
+              </span>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="detail">
+          <td></td>
+          <td colspan="5">
+            <p>{{ citation.explanation }}</p>
+            {% if citation.mismatches %}
+            <ul class="mismatches">
+              {% for item in citation.mismatches %}<li>{{ item }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+            {% if citation.links %}
+            <p class="links">
+              {% for link in citation.links %}
+              <a href="{{ link.url }}" rel="noopener noreferrer">{{ link.label }}</a>
+              {% endfor %}
+            </p>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% endfor %}
+{% endif %}

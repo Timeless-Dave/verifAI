@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}VerifAI — check the citations{% endblock %}
+{% block body %}
+<section class="intro">
+  <div>
+    <p class="kicker">Citation checker</p>
+    <h1>Do these references exist?</h1>
+    <p class="lede">Paste a chatbot answer, a paragraph, or a reference list. VerifAI extracts DOIs, URLs, and bibliographic references, then asks more than one public index whether each one is real.</p>
+  </div>
+  <ol class="steps">
+    <li><strong>Extract with rules.</strong> DOIs, links, and references such as “Smith et al., 2021, Journal, Title”. No model is loaded.</li>
+    <li><strong>Ask independent sources.</strong> Free-text references are searched in Crossref and OpenAlex, and in DataCite so a preprint those indexes miss is not judged only by a later reprint. DOIs are resolved at doi.org and cross-checked in OpenAlex. No one of those sources decides alone.</li>
+    <li><strong>Keep going if one is down.</strong> A missing provider lowers confidence. It does not silently become the whole verdict. Google Fact Check, later, would be just another provider.</li>
+  </ol>
+</section>
+
+{% if mailto_is_placeholder %}
+<p class="banner banner-note">The contact address is still the example placeholder. Set <code>VERIFAI_MAILTO</code> in <code>.env</code> so Crossref can put this client in its polite pool.</p>
+{% endif %}
+
+<form class="check-form" method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator="#spinner" hx-disabled-elt="find button">
+  <label for="claim">Pasted text</label>
+  <textarea id="claim" name="text" rows="12" required placeholder="Paste an answer that cites papers, DOIs, or links.">{{ text }}</textarea>
+  <div class="form-row">
+    <button type="submit" class="primary">Check citations <span id="spinner" class="spinner htmx-indicator" aria-hidden="true"></span></button>
+    <button type="button" class="ghost" data-load-example>Load an example</button>
+    <p class="hint-inline">⌘/Ctrl + Enter</p>
+  </div>
+</form>
+<script id="example-text" type="application/json">{{ example_json | safe }}</script>
+
+<div id="results">
+  {% if results or error %}
+    {% include "results.html" %}
+  {% else %}
+    <p class="hint">Each citation gets its own row: verified, partially matches, not found, or unreachable.</p>
+  {% endif %}
+</div>
+
+<section class="legend">
+  <h2>What the statuses mean</h2>
+  <dl>
+    <div><dt>Verified</dt><dd>A retrieved record matches the citation, or the URL loaded, or the Wayback Machine has a snapshot.</dd></div>
+    <div><dt>Partially matches</dt><dd>A real record is close, but authors, year, or venue disagree, or the DOI points at a different title than the one printed beside it.</dd></div>
+    <div><dt>Not found</dt><dd>The sources that answered have no matching record, or the URL is a clear 404 with no archive. Often a fabricated citation. Coverage is not perfect, so confidence is lower when a source was down.</dd></div>
+    <div><dt>Unreachable</dt><dd>The check could not be finished: timeout, server error, or the host refused the fetch. This is not evidence the citation is fake.</dd></div>
+  </dl>
+</section>
+{% endblock %}
