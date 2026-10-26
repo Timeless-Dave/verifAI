@@ -131,8 +131,11 @@ Matching uses RapidFuzz on normalized titles (case, accents, and punctuation fol
 | `VERIFAI_MAILTO` | `verifai-dev@example.com` | Contact address in the User-Agent. Crossref’s polite pool wants a real mailbox. Also sent as OpenAlex `mailto`. |
 | `VERIFAI_OPENALEX_API_KEY` | empty | Optional. Without a key, OpenAlex shares a small free daily budget per IP. A 402 or 429 becomes “OpenAlex unavailable”, and Crossref still answers. |
 | `VERIFAI_SEMANTIC_SCHOLAR_API_KEY` | empty | Optional. Unset means Semantic Scholar is not called. |
-| `VERIFAI_HTTP_TIMEOUT` | `20` | Seconds to wait for a response body. Connecting still gives up after 5 seconds. |
-| `VERIFAI_HTTP_RETRIES` | `1` | Extra attempts on timeout, 429, and 5xx. |
+| `VERIFAI_HTTP_TIMEOUT` | `20` | Seconds to wait for a response body. Connecting still gives up after 5 seconds. Values above 120 are rejected. |
+| `VERIFAI_HTTP_RETRIES` | `1` | Extra attempts on timeout, 429, and 5xx. Capped at 8. |
+| `VERIFAI_HTTP_MIN_INTERVAL_SECONDS` | `0.2` | Minimum gap between requests to the same host. `0` disables it. Other hosts are not blocked. |
+| `VERIFAI_HTTP_MAX_RESPONSE_BYTES` | `2000000` | Larger response bodies are discarded and that provider is unavailable. |
+| `VERIFAI_MAX_TEXT_CHARS` | `50000` | Longest paste that will be checked. The HTTP body limit is a bit more than six times this, to allow JSON escaping. |
 | `VERIFAI_CACHE_TTL_SECONDS` | `3600` | In-memory cache for successful responses. |
 | `VERIFAI_HOST`, `VERIFAI_PORT` | `127.0.0.1`, `8741` | Bind address. |
 
@@ -161,6 +164,10 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the same pytest suite on push a
 - The cache is in memory only. Restarting the process clears it. At most 25 citations are checked per paste, to keep outbound traffic polite.
 - There is no account system, database, or browser extension. Those are later work. No local model is wired up; the checker is required to work with none.
 - This is not a substitute for opening the paper.
+
+## Contributing and security
+
+See `CONTRIBUTING.md` for the evidence principle and local checks, and `SECURITY.md` for how to report a vulnerability. Do not put secrets in issues or pull requests.
 
 ## License
 
