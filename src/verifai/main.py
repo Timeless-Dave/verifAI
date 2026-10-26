@@ -18,9 +18,9 @@ from verifai.config import Settings, get_settings
 from verifai.experts.citation import build_citation_expert
 from verifai.experts.router import Router
 from verifai.http import PoliteHttp
-from verifai.logging import configure_logging
+from verifai.logging import configure_logging, request_id_var
 from verifai.web.limits import BodySizeLimitMiddleware
-from verifai.web.request_id import RequestIdMiddleware
+from verifai.web.request_id import RequestIdMiddleware, request_id_from_scope
 from verifai.web.routes import STATIC_DIR, build_web_router
 
 log = logging.getLogger(__name__)
@@ -34,17 +34,26 @@ def _install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception) -> JSONResponse:
-        log.error(
-            "unhandled %s on %s %s",
-            type(exc).__name__,
-            request.method,
-            request.url.path,
-            exc_info=exc,
-        )
-        return JSONResponse(
+        request_id = request_id_from_scope(request.scope)
+        token = request_id_var.set(request_id) if request_id else None
+        try:
+            log.error(
+                "unhandled %s on %s %s",
+                type(exc).__name__,
+                request.method,
+                request.url.path,
+                exc_info=exc,
+            )
+        finally:
+            if token is not None:
+                request_id_var.reset(token)
+        response = JSONResponse(
             status_code=500,
             content={"detail": "The check failed before it could finish."},
         )
+        if request_id:
+            response.headers["X-Request-ID"] = request_id
+        return response
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
