@@ -189,7 +189,13 @@ class PoliteHttp:
                 headers=headers,
             )
         except httpx.HTTPError as exc:
-            return HttpResult(url=url, status_code=None, content=b"", headers={}, error=type(exc).__name__ + ": " + str(exc))
+            return HttpResult(
+                url=url,
+                status_code=None,
+                content=b"",
+                headers={},
+                error=type(exc).__name__ + ": " + str(exc),
+            )
         return _from_response(response)
 
     def _stream_get(self, url: str) -> HttpResult:

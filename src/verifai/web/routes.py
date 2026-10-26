@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -41,7 +42,7 @@ def build_web_router() -> APIRouter:
         )
 
     @router.post("/check", response_class=HTMLResponse)
-    def check_form(request: Request, text: str = Form("")) -> HTMLResponse:
+    def check_form(request: Request, text: Annotated[str, Form()] = "") -> HTMLResponse:
         partial = request.headers.get("hx-request") == "true"
         error, cleaned = _validate(text, request.app.state.settings.max_text_chars)
         context = {
@@ -56,7 +57,9 @@ def build_web_router() -> APIRouter:
                 context["results"] = _run(request, cleaned)
             except Exception:
                 log.exception("citation check failed")
-                context["error"] = "The check failed before it could finish. See the server log for the traceback."
+                context["error"] = (
+                    "The check failed before it could finish. See the server log for the traceback."
+                )
         if partial:
             return _render(request, "results.html", context)
         return _render(request, "index.html", context)
@@ -70,7 +73,9 @@ def build_web_router() -> APIRouter:
             results = _run(request, cleaned)
         except Exception as exc:
             log.exception("citation check failed")
-            raise HTTPException(status_code=500, detail="The check failed before it could finish.") from exc
+            raise HTTPException(
+                status_code=500, detail="The check failed before it could finish."
+            ) from exc
         return CheckResponse(results=results)
 
     @router.get("/health")

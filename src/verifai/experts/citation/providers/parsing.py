@@ -98,7 +98,9 @@ def record_from_semantic_scholar(paper: dict) -> Record | None:
         authors.append(name.strip())
         surnames.append(surname_from_display(name))
     year = paper.get("year") if isinstance(paper.get("year"), int) else None
-    venue = paper.get("venue") if isinstance(paper.get("venue"), str) and paper.get("venue") else None
+    venue = (
+        paper.get("venue") if isinstance(paper.get("venue"), str) and paper.get("venue") else None
+    )
     external = paper.get("externalIds") if isinstance(paper.get("externalIds"), dict) else {}
     doi = external.get("DOI") if isinstance(external.get("DOI"), str) else None
     url = paper.get("url") if isinstance(paper.get("url"), str) else None
@@ -133,7 +135,11 @@ def record_from_datacite(item: dict) -> Record | None:
     titles = payload.get("titles")
     if isinstance(titles, list):
         for entry in titles:
-            if isinstance(entry, dict) and isinstance(entry.get("title"), str) and entry["title"].strip():
+            if (
+                isinstance(entry, dict)
+                and isinstance(entry.get("title"), str)
+                and entry["title"].strip()
+            ):
                 title = entry["title"].strip()
                 break
     doi = payload.get("doi") if isinstance(payload.get("doi"), str) else None
@@ -143,9 +149,17 @@ def record_from_datacite(item: dict) -> Record | None:
     year = _datacite_year(payload.get("publicationYear"))
     venue = None
     container = payload.get("container")
-    if isinstance(container, dict) and isinstance(container.get("title"), str) and container["title"].strip():
+    if (
+        isinstance(container, dict)
+        and isinstance(container.get("title"), str)
+        and container["title"].strip()
+    ):
         venue = container["title"].strip()
-    url = payload.get("url") if isinstance(payload.get("url"), str) and payload["url"].strip() else None
+    url = (
+        payload.get("url")
+        if isinstance(payload.get("url"), str) and payload["url"].strip()
+        else None
+    )
     if url is None and doi:
         url = f"https://doi.org/{doi}"
     return Record(

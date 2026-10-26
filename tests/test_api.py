@@ -1,4 +1,5 @@
 from tests.fakes import install
+
 from verifai.sample import EXAMPLE_TEXT
 
 

@@ -57,7 +57,9 @@ class OpenAlexProvider:
             return ProviderOutcome(self.name, unavailable=True, error=_error(result))
         body = result.json_body()
         if not isinstance(body, dict) or not isinstance(body.get("results"), list):
-            return ProviderOutcome(self.name, unavailable=True, error="OpenAlex response was not a work list")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="OpenAlex response was not a work list"
+            )
         records = []
         for work in body["results"]:
             record = record_from_openalex(work)
@@ -70,7 +72,9 @@ class OpenAlexProvider:
             return ProviderOutcome(self.name, unavailable=True, error=_error(result))
         body = result.json_body()
         if not isinstance(body, dict):
-            return ProviderOutcome(self.name, unavailable=True, error="OpenAlex response was not JSON")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="OpenAlex response was not JSON"
+            )
         record = record_from_openalex(body)
         if record is None:
             return ProviderOutcome(self.name, unavailable=True, error="OpenAlex work had no title")
@@ -90,7 +94,11 @@ def _filter_value(title: str) -> str:
 
 
 def _down(result: HttpResult) -> bool:
-    return result.error is not None or result.status_code is None or result.status_code in RETRY_STATUSES | {402}
+    return (
+        result.error is not None
+        or result.status_code is None
+        or result.status_code in RETRY_STATUSES | {402}
+    )
 
 
 def _error(result: HttpResult) -> str:

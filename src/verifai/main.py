@@ -29,7 +29,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = settings
         app.state.http = http
         app.state.router = Router([expert])
-        log.info("VerifAI %s ready. Providers: %s", settings.app_version, ", ".join(expert.registry.names()))
+        log.info(
+            "VerifAI %s ready. Providers: %s",
+            settings.app_version,
+            ", ".join(expert.registry.names()),
+        )
         try:
             yield
         finally:
@@ -59,4 +63,4 @@ if __name__ == "__main__":
     run()
 
 
-__all__ = ["app", "create_app", "run", "__version__"]
+__all__ = ["__version__", "app", "create_app", "run"]

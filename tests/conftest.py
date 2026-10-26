@@ -11,17 +11,17 @@ from verifai.main import create_app
 
 
 def make_settings(**overrides) -> Settings:
-    values = dict(
-        mailto="tests@example.com",
-        http_retries=0,
-        http_backoff_seconds=0.0,
-        cache_ttl_seconds=0,
-        negative_cache_ttl_seconds=0,
-        http_timeout=2.0,
-        max_concurrency=1,
-        semantic_scholar_api_key=None,
-        openalex_api_key=None,
-    )
+    values = {
+        "mailto": "tests@example.com",
+        "http_retries": 0,
+        "http_backoff_seconds": 0.0,
+        "cache_ttl_seconds": 0,
+        "negative_cache_ttl_seconds": 0,
+        "http_timeout": 2.0,
+        "max_concurrency": 1,
+        "semantic_scholar_api_key": None,
+        "openalex_api_key": None,
+    }
     values.update(overrides)
     return Settings(**values)
 

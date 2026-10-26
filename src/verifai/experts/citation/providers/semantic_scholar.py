@@ -53,7 +53,9 @@ class SemanticScholarProvider:
         body = result.json_body()
         papers = body.get("data") if isinstance(body, dict) else None
         if not isinstance(papers, list):
-            return ProviderOutcome(self.name, unavailable=True, error="Semantic Scholar response was not a paper list")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="Semantic Scholar response was not a paper list"
+            )
         records = []
         for paper in papers:
             record = record_from_semantic_scholar(paper)
@@ -66,7 +68,9 @@ class SemanticScholarProvider:
             return ProviderOutcome(self.name, unavailable=True, error=_error(result))
         body = result.json_body()
         if not isinstance(body, dict):
-            return ProviderOutcome(self.name, unavailable=True, error="Semantic Scholar response was not JSON")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="Semantic Scholar response was not JSON"
+            )
         record = record_from_semantic_scholar(body)
         if record is None:
             return ProviderOutcome(self.name, unavailable=False, records=[])
@@ -74,7 +78,11 @@ class SemanticScholarProvider:
 
 
 def _down(result: HttpResult) -> bool:
-    return result.error is not None or result.status_code is None or result.status_code in RETRY_STATUSES
+    return (
+        result.error is not None
+        or result.status_code is None
+        or result.status_code in RETRY_STATUSES
+    )
 
 
 def _error(result: HttpResult) -> str:

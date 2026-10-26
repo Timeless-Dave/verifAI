@@ -84,7 +84,11 @@ def _phrase(value: str) -> str:
 
 
 def _down(result: HttpResult) -> bool:
-    return result.error is not None or result.status_code is None or result.status_code in RETRY_STATUSES
+    return (
+        result.error is not None
+        or result.status_code is None
+        or result.status_code in RETRY_STATUSES
+    )
 
 
 def _error(result: HttpResult) -> str:

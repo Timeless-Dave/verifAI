@@ -173,8 +173,7 @@ class CitationExpert:
         return self._providers["wayback"]  # type: ignore[return-value]
 
     def _scholar(self) -> SemanticScholarProvider | None:
-        provider = self._providers.get("semantic_scholar")
-        return provider  # type: ignore[return-value]
+        return self._providers.get("semantic_scholar")  # type: ignore[return-value]
 
 
 def build_citation_expert(http: PoliteHttp, settings: Settings) -> CitationExpert:
@@ -187,9 +186,7 @@ def build_citation_expert(http: PoliteHttp, settings: Settings) -> CitationExper
         WaybackProvider(http),
     ]
     if settings.semantic_scholar_api_key:
-        providers.append(
-            SemanticScholarProvider(http, api_key=settings.semantic_scholar_api_key)
-        )
+        providers.append(SemanticScholarProvider(http, api_key=settings.semantic_scholar_api_key))
     return CitationExpert(providers, max_concurrency=settings.max_concurrency)
 
 
@@ -217,18 +214,18 @@ def _summarize(citations: list[CitationResult], *, truncated: bool) -> ExpertRes
     total = len(citations)
     verdict, lead = _verdict(counts, total)
     pieces = [
-        f"Checked {total} citation{'s' if total != 1 else ''}: "
-        f"{counts[CitationStatus.VERIFIED]} verified, "
-        f"{counts[CitationStatus.PARTIALLY_MATCHES]} partially matching, "
-        f"{counts[CitationStatus.NOT_FOUND]} not found, "
-        f"{counts[CitationStatus.UNREACHABLE]} unreachable."
+        (
+            f"Checked {total} citation{'s' if total != 1 else ''}: "
+            f"{counts[CitationStatus.VERIFIED]} verified, "
+            f"{counts[CitationStatus.PARTIALLY_MATCHES]} partially matching, "
+            f"{counts[CitationStatus.NOT_FOUND]} not found, "
+            f"{counts[CitationStatus.UNREACHABLE]} unreachable."
+        )
     ]
     if truncated:
         pieces.append(f"Only the first {MAX_CITATIONS} citations were checked.")
     pieces.append(lead)
-    unavailable = ordered_sources(
-        name for item in citations for name in item.sources_unavailable
-    )
+    unavailable = ordered_sources(name for item in citations for name in item.sources_unavailable)
     if unavailable:
         labels = ", ".join(source_label(name) for name in unavailable)
         pieces.append(
@@ -248,8 +245,12 @@ def _summarize(citations: list[CitationResult], *, truncated: bool) -> ExpertRes
         confidence=confidence,
         explanation=" ".join(pieces),
         evidence=evidence,
-        sources_consulted=ordered_sources(name for item in citations for name in item.sources_consulted),
-        sources_contributed=ordered_sources(name for item in citations for name in item.sources_contributed),
+        sources_consulted=ordered_sources(
+            name for item in citations for name in item.sources_consulted
+        ),
+        sources_contributed=ordered_sources(
+            name for item in citations for name in item.sources_contributed
+        ),
         sources_unavailable=unavailable,
         citations=citations,
     )

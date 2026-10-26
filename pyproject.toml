@@ -56,3 +56,40 @@ only-include = ["src/verifai"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",       # Docstrings explain the evidence rule; they are not required on every helper.
+  "ANN",     # mypy --strict is the type gate.
+  "TC001",   # Deferred annotations are already in use via `from __future__ import annotations`.
+  "TC002",
+  "TC003",
+  "COM812",  # Trailing-comma rules fight the formatter.
+  "ISC001",
+  "CPY001",  # The MIT license covers the tree. Files do not each carry a copyright banner.
+  "E501",    # The formatter wraps code. Long explanations stay on one readable line.
+  "UP042",   # `class Verdict(str, Enum)` stringifies as `Verdict.MIXED`. Templates use `.value`.
+  "C901",    # The decider and extractor are branchy on purpose. Tests lock the branches.
+  "PLR0911",
+  "PLR0912",
+  "PLR0913",
+  "PLR0915",
+  "PLR0917",
+  "RUF001",  # Citations contain real names and punctuation, including "Ł".
+  "RUF002",
+  "RUF003",
+  "S101",    # Assertions are the test suite and a few internal invariants.
+  "PLR2004", # Match thresholds are pinned by tests.
+  "TRY003",  # Exception text is the message a caller reads.
+  "EM101",
+  "EM102",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "ARG001", "PLC0415", "PT018"]

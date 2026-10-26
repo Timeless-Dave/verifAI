@@ -60,7 +60,9 @@ def install(
         record = _known_doi(doi)
         if record is None:
             return httpx.Response(404, text="Resource not found.")
-        return httpx.Response(200, json={"status": "ok", "message-type": "work", "message": _crossref_item(record)})
+        return httpx.Response(
+            200, json={"status": "ok", "message-type": "work", "message": _crossref_item(record)}
+        )
 
     def openalex(request: httpx.Request) -> httpx.Response:
         if openalex_down:
@@ -75,7 +77,10 @@ def install(
         found = _search_records(_filter_title(request))
         if attention_indexes_reprint_only:
             found = [item for item in found if item["doi"].lower() != ATTENTION_DOI]
-        return httpx.Response(200, json={"meta": {"count": len(found)}, "results": [_openalex(item) for item in found]})
+        return httpx.Response(
+            200,
+            json={"meta": {"count": len(found)}, "results": [_openalex(item) for item in found]},
+        )
 
     def datacite(request: httpx.Request) -> httpx.Response:
         if datacite_down:
@@ -140,7 +145,10 @@ def _filter_title(request: httpx.Request) -> str:
 
 
 def _search_items(request: httpx.Request) -> list[dict]:
-    return [_crossref_item(record) for record in _search_records(request.url.params.get("query.title", ""))]
+    return [
+        _crossref_item(record)
+        for record in _search_records(request.url.params.get("query.title", ""))
+    ]
 
 
 def _search_records(title: str) -> list[dict]:
@@ -166,7 +174,14 @@ def _search_records(title: str) -> list[dict]:
             _record(
                 JINEK_DOI,
                 JINEK_TITLE,
-                ["Martin Jinek", "Krzysztof Chylinski", "Ines Fonfara", "Michael Hauer", "Jennifer Doudna", "Emmanuelle Charpentier"],
+                [
+                    "Martin Jinek",
+                    "Krzysztof Chylinski",
+                    "Ines Fonfara",
+                    "Michael Hauer",
+                    "Jennifer Doudna",
+                    "Emmanuelle Charpentier",
+                ],
                 2012,
                 "Science",
             )
@@ -199,7 +214,13 @@ def _known_doi(doi: str) -> dict | None:
             "Science",
         )
     if ATTENTION_DOI in lowered:
-        return _record(ATTENTION_DOI, ATTENTION_TITLE, ATTENTION_AUTHORS, 2017, "Advances in Neural Information Processing Systems")
+        return _record(
+            ATTENTION_DOI,
+            ATTENTION_TITLE,
+            ATTENTION_AUTHORS,
+            2017,
+            "Advances in Neural Information Processing Systems",
+        )
     return None
 
 
@@ -212,7 +233,11 @@ def _crossref_item(record: dict) -> dict:
         "DOI": record["doi"],
         "title": [record["title"]],
         "author": [
-            {"given": name.split()[0], "family": name.split()[-1], "sequence": "first" if index == 0 else "additional"}
+            {
+                "given": name.split()[0],
+                "family": name.split()[-1],
+                "sequence": "first" if index == 0 else "additional",
+            }
             for index, name in enumerate(record["authors"])
         ],
         "issued": {"date-parts": [[record["year"]]]},
@@ -229,8 +254,7 @@ def _csl(record: dict) -> dict:
         "DOI": record["doi"],
         "title": record["title"],
         "author": [
-            {"given": name.split()[0], "family": name.split()[-1]}
-            for name in record["authors"]
+            {"given": name.split()[0], "family": name.split()[-1]} for name in record["authors"]
         ],
         "issued": {"date-parts": [[record["year"]]]},
         "container-title": record["venue"],
@@ -244,7 +268,9 @@ def _datacite_item(record: dict) -> dict:
         parts = name.split()
         family = parts[-1]
         given = " ".join(parts[:-1])
-        creators.append({"name": f"{family}, {given}".strip(", "), "givenName": given, "familyName": family})
+        creators.append(
+            {"name": f"{family}, {given}".strip(", "), "givenName": given, "familyName": family}
+        )
     return {
         "id": f"https://doi.org/{record['doi']}",
         "attributes": {

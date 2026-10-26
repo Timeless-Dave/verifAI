@@ -30,7 +30,7 @@ def public_url_problem(url: str, *, resolve: Resolver = socket.getaddrinfo) -> s
     if not host:
         return "The URL has no host."
     lowered = host.lower().rstrip(".")
-    if lowered == "localhost" or lowered.endswith(".localhost") or lowered.endswith(".local"):
+    if lowered == "localhost" or lowered.endswith((".localhost", ".local")):
         return f"{host} is a local name. VerifAI only fetches public URLs."
     try:
         literal = ipaddress.ip_address(lowered)

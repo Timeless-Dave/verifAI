@@ -1,7 +1,7 @@
 import httpx
 import respx
-
 from tests.conftest import make_settings
+
 from verifai.http import PoliteHttp, request_timeout
 
 

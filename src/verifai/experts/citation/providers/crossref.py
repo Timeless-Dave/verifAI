@@ -30,7 +30,10 @@ class CrossrefProvider:
         venue: str | None,
         raw: str,
     ) -> ProviderOutcome:
-        del year, venue  # kept in the signature so providers stay interchangeable; year is judged later
+        del (
+            year,
+            venue,
+        )  # kept in the signature so providers stay interchangeable; year is judged later
         params: dict[str, object] = {"rows": 5}
         if title:
             params["query.title"] = title
@@ -45,7 +48,9 @@ class CrossrefProvider:
             return ProviderOutcome(self.name, unavailable=True, error=_error(result))
         message = crossref_message(result.json_body())
         if message is None:
-            return ProviderOutcome(self.name, unavailable=True, error="Crossref response was not JSON")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="Crossref response was not JSON"
+            )
         items = message.get("items") if isinstance(message.get("items"), list) else []
         records = []
         for item in items:
@@ -63,7 +68,9 @@ class CrossrefProvider:
             return ProviderOutcome(self.name, unavailable=True, error=_error(result))
         message = crossref_message(result.json_body())
         if message is None:
-            return ProviderOutcome(self.name, unavailable=True, error="Crossref response was not JSON")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="Crossref response was not JSON"
+            )
         record = record_from_crossref_like(self.name, message)
         records: list[Record] = [record] if record and record.title else []
         if record and record.title is None and record.doi:
@@ -72,7 +79,11 @@ class CrossrefProvider:
 
 
 def _unavailable(result: HttpResult) -> bool:
-    return result.error is not None or result.status_code is None or result.status_code in RETRY_STATUSES
+    return (
+        result.error is not None
+        or result.status_code is None
+        or result.status_code in RETRY_STATUSES
+    )
 
 
 def _error(result: HttpResult) -> str:

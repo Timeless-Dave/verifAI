@@ -5,7 +5,14 @@ from verifai.sample import EXAMPLE_TEXT
 def test_example_text_finds_real_and_fake_citations():
     found = extract_citations(EXAMPLE_TEXT)
     kinds = [(item.kind, item.doi or item.title or item.url) for item in found]
-    assert [kind for kind, _ in kinds] == ["reference", "reference", "doi", "reference", "doi", "url"]
+    assert [kind for kind, _ in kinds] == [
+        "reference",
+        "reference",
+        "doi",
+        "reference",
+        "doi",
+        "url",
+    ]
     assert found[0].year == 2017
     assert found[0].surnames[0] == "Vaswani"
     assert "Polosukhin" in found[0].surnames

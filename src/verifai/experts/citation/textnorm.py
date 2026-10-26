@@ -16,8 +16,7 @@ def fold(value: str) -> str:
     value = value.casefold()
     value = value.replace("&", " and ")
     value = re.sub(r"[^\w\s]", " ", value, flags=re.UNICODE)
-    value = re.sub(r"\s+", " ", value).strip()
-    return value
+    return re.sub(r"\s+", " ", value).strip()
 
 
 def word_count(value: str) -> int:
@@ -30,7 +29,11 @@ def surname_from_display(name: str) -> str:
         parts.pop()
     if not parts:
         return name.strip()
-    if len(parts) >= 3 and parts[-2].casefold() in _PARTICLES and parts[-3].casefold() in _PARTICLES:
+    if (
+        len(parts) >= 3
+        and parts[-2].casefold() in _PARTICLES
+        and parts[-3].casefold() in _PARTICLES
+    ):
         return " ".join(parts[-3:])
     if len(parts) >= 2 and parts[-2].casefold() in _PARTICLES:
         return " ".join(parts[-2:])
