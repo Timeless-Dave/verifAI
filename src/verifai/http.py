@@ -6,7 +6,10 @@ import hashlib
 import json
 import threading
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -29,7 +32,7 @@ class HttpResult:
     def ok(self) -> bool:
         return self.error is None and self.status_code is not None and 200 <= self.status_code < 300
 
-    def json_body(self) -> dict | list | None:
+    def json_body(self) -> dict[str, Any] | list[Any] | None:
         if not self.content:
             return None
         try:
@@ -82,6 +85,39 @@ class TTLCache:
             self._data.clear()
 
 
+class HostPacer:
+    """Minimum gap between requests to the same host.
+
+    An interval of zero disables the wait. Different hosts do not block
+    each other, so Crossref and OpenAlex can still be asked together.
+    """
+
+    def __init__(
+        self,
+        interval: float,
+        *,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.interval = interval
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._lock = threading.Lock()
+        self._next_by_host: dict[str, float] = {}
+
+    def wait(self, url: str) -> None:
+        if self.interval <= 0:
+            return
+        host = urlsplit(url).netloc.lower()
+        with self._lock:
+            now = self._monotonic()
+            earliest = self._next_by_host.get(host, now)
+            delay = max(0.0, earliest - now)
+            self._next_by_host[host] = max(now, earliest) + self.interval
+        if delay > 0:
+            self._sleep(delay)
+
+
 class PoliteHttp:
     """Shared client for every evidence provider.
 
@@ -93,6 +129,7 @@ class PoliteHttp:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.cache = TTLCache()
+        self.pacer = HostPacer(settings.http_min_interval_seconds)
         self.client = httpx.Client(
             timeout=request_timeout(settings.http_timeout),
             headers={"User-Agent": settings.user_agent},
@@ -108,7 +145,7 @@ class PoliteHttp:
         self,
         url: str,
         *,
-        params: dict | None = None,
+        params: Mapping[str, Any] | None = None,
         headers: dict[str, str] | None = None,
     ) -> HttpResult:
         accept = (headers or {}).get("Accept", "")
@@ -147,7 +184,7 @@ class PoliteHttp:
         method: str,
         url: str,
         *,
-        params: dict | None,
+        params: Mapping[str, Any] | None,
         headers: dict[str, str] | None,
     ) -> HttpResult:
         attempts = self.settings.http_retries + 1
@@ -178,9 +215,10 @@ class PoliteHttp:
         method: str,
         url: str,
         *,
-        params: dict | None,
+        params: Mapping[str, Any] | None,
         headers: dict[str, str] | None,
     ) -> HttpResult:
+        self.pacer.wait(url)
         try:
             response = self.client.request(
                 method,
@@ -189,10 +227,17 @@ class PoliteHttp:
                 headers=headers,
             )
         except httpx.HTTPError as exc:
-            return HttpResult(url=url, status_code=None, content=b"", headers={}, error=type(exc).__name__ + ": " + str(exc))
-        return _from_response(response)
+            return HttpResult(
+                url=url,
+                status_code=None,
+                content=b"",
+                headers={},
+                error=type(exc).__name__ + ": " + str(exc),
+            )
+        return _cap_body(_from_response(response), self.settings.http_max_response_bytes)
 
     def _stream_get(self, url: str) -> HttpResult:
+        self.pacer.wait(url)
         try:
             with self.client.stream("GET", url, headers={"Accept": "*/*"}) as response:
                 chunks = bytearray()
@@ -228,6 +273,18 @@ def request_timeout(read_seconds: float) -> httpx.Timeout:
     return httpx.Timeout(connect=quick, read=read, write=min(10.0, read), pool=quick)
 
 
+def _cap_body(result: HttpResult, limit: int) -> HttpResult:
+    if result.error is not None or len(result.content) <= limit:
+        return result
+    return HttpResult(
+        url=result.url,
+        status_code=result.status_code,
+        content=b"",
+        headers=result.headers,
+        error=f"response was larger than {limit} bytes",
+    )
+
+
 def _from_response(response: httpx.Response, content: bytes | None = None) -> HttpResult:
     body = response.content if content is None else content
     return HttpResult(
@@ -239,14 +296,14 @@ def _from_response(response: httpx.Response, content: bytes | None = None) -> Ht
     )
 
 
-def _clean_params(params: dict | None) -> dict | None:
+def _clean_params(params: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
     if not params:
         return None
     cleaned = {key: value for key, value in params.items() if value is not None and value != ""}
     return cleaned or None
 
 
-def _cache_key(method: str, url: str, params: dict | None, accept: str) -> str:
+def _cache_key(method: str, url: str, params: Mapping[str, Any] | None, accept: str) -> str:
     payload = json.dumps(
         {"m": method, "u": url, "p": _clean_params(params) or {}, "a": accept},
         sort_keys=True,

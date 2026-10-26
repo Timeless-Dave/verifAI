@@ -30,8 +30,12 @@ verifai = "verifai.main:run"
 
 [dependency-groups]
 dev = [
+  "mypy>=2.4.0",
+  "pre-commit>=4.7.0",
   "pytest>=8.3.0",
+  "pytest-cov>=7.1.0",
   "respx>=0.21.1",
+  "ruff>=0.17.2",
 ]
 
 [build-system]
@@ -48,7 +52,66 @@ only-include = ["src/verifai"]
 "src/verifai/web/templates" = "verifai/web/templates"
 "src/verifai/web/static" = "verifai/web/static"
 
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/verifai", "tests"]
+mypy_path = "src"
+explicit_package_bases = true
+warn_unreachable = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q --cov=verifai --cov-report=term-missing --cov-fail-under=85"
+
+[tool.coverage.run]
+source = ["src/verifai"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 85
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",       # Docstrings explain the evidence rule; they are not required on every helper.
+  "ANN",     # mypy --strict is the type gate.
+  "TC001",   # Deferred annotations are already in use via `from __future__ import annotations`.
+  "TC002",
+  "TC003",
+  "COM812",  # Trailing-comma rules fight the formatter.
+  "ISC001",
+  "CPY001",  # The MIT license covers the tree. Files do not each carry a copyright banner.
+  "E501",    # The formatter wraps code. Long explanations stay on one readable line.
+  "UP042",   # `class Verdict(str, Enum)` stringifies as `Verdict.MIXED`. Templates use `.value`.
+  "C901",    # The decider and extractor are branchy on purpose. Tests lock the branches.
+  "PLR0911",
+  "PLR0912",
+  "PLR0913",
+  "PLR0915",
+  "PLR0917",
+  "RUF001",  # Citations contain real names and punctuation, including "Ł".
+  "RUF002",
+  "RUF003",
+  "S101",    # Assertions are the test suite and a few internal invariants.
+  "PLR2004", # Match thresholds are pinned by tests.
+  "TRY003",  # Exception text is the message a caller reads.
+  "EM101",
+  "EM102",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "ARG001", "PLC0415", "PT018"]

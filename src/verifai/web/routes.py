@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from verifai.sample import EXAMPLE_TEXT
-from verifai.schemas import CheckRequest, CheckResponse, source_label
+from verifai.schemas import CheckRequest, CheckResponse, ExpertResult, clean_paste, source_label
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def build_web_router() -> APIRouter:
         )
 
     @router.post("/check", response_class=HTMLResponse)
-    def check_form(request: Request, text: str = Form("")) -> HTMLResponse:
+    def check_form(request: Request, text: Annotated[str, Form()] = "") -> HTMLResponse:
         partial = request.headers.get("hx-request") == "true"
         error, cleaned = _validate(text, request.app.state.settings.max_text_chars)
         context = {
@@ -56,7 +57,9 @@ def build_web_router() -> APIRouter:
                 context["results"] = _run(request, cleaned)
             except Exception:
                 log.exception("citation check failed")
-                context["error"] = "The check failed before it could finish. See the server log for the traceback."
+                context["error"] = (
+                    "The check failed before it could finish. See the server log for the traceback."
+                )
         if partial:
             return _render(request, "results.html", context)
         return _render(request, "index.html", context)
@@ -70,11 +73,13 @@ def build_web_router() -> APIRouter:
             results = _run(request, cleaned)
         except Exception as exc:
             log.exception("citation check failed")
-            raise HTTPException(status_code=500, detail="The check failed before it could finish.") from exc
+            raise HTTPException(
+                status_code=500, detail="The check failed before it could finish."
+            ) from exc
         return CheckResponse(results=results)
 
     @router.get("/health")
-    def health(request: Request) -> dict:
+    def health(request: Request) -> dict[str, Any]:
         expert = request.app.state.router.experts[0]
         return {
             "status": "ok",
@@ -85,7 +90,7 @@ def build_web_router() -> APIRouter:
     return router
 
 
-def _run(request: Request, text: str):
+def _run(request: Request, text: str) -> list[ExpertResult]:
     experts = request.app.state.router.select(text)
     if not experts:
         return []
@@ -93,7 +98,10 @@ def _run(request: Request, text: str):
 
 
 def _validate(text: str, limit: int) -> tuple[str | None, str]:
-    cleaned = (text or "").strip()
+    try:
+        cleaned = clean_paste(text or "")
+    except ValueError as exc:
+        return str(exc), text or ""
     if not cleaned:
         return "Paste some text first.", ""
     if len(cleaned) > limit:
@@ -105,9 +113,12 @@ def _example_json() -> str:
     return json.dumps(EXAMPLE_TEXT).replace("<", "\\u003c")
 
 
-def _render(request: Request, name: str, context: dict, status_code: int = 200) -> HTMLResponse:
+def _render(
+    request: Request, name: str, context: dict[str, Any], status_code: int = 200
+) -> HTMLResponse:
     try:
         return templates.TemplateResponse(request, name, context, status_code=status_code)
     except TypeError:
+        # Starlette before the request-first signature.
         merged = {"request": request, **context}
-        return templates.TemplateResponse(name, merged, status_code=status_code)
+        return templates.TemplateResponse(name, merged, status_code=status_code)  # type: ignore[arg-type]

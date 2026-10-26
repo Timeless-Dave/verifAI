@@ -10,6 +10,7 @@ registered beside other providers and must never be the sole decider.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Protocol, runtime_checkable
 
 from verifai.schemas import EVIDENCE_PRINCIPLE
@@ -49,7 +50,7 @@ class EvidenceRegistry:
     def __contains__(self, name: str) -> bool:
         return name in self._providers
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[EvidenceProvider]:
         return iter(self._providers.values())
 
     def __len__(self) -> int:

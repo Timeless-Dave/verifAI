@@ -36,6 +36,7 @@ def test_crossref_and_doi_org_shapes():
         },
     )
     assert csl is not None
+    assert csl.title is not None
     assert csl.title.startswith("A Programmable")
     assert csl.venue == "Science"
 

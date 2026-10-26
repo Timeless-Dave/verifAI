@@ -10,8 +10,10 @@ def test_principle_is_shared_and_forbids_a_sole_decider():
     assert "sole decider" in EVIDENCE_PRINCIPLE
     assert "Google Fact Check" in EVIDENCE_PRINCIPLE
     assert SCHEMA_PRINCIPLE == EVIDENCE_PRINCIPLE
-    assert "Google Fact Check" in Expert.__doc__
-    assert "Crossref and OpenAlex" in Expert.__doc__
+    doc = Expert.__doc__
+    assert doc is not None
+    assert "Google Fact Check" in doc
+    assert "Crossref and OpenAlex" in doc
 
 
 def test_citation_expert_refuses_a_single_index(polite_http):

@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from typing import cast
 
 from verifai.config import Settings
-from verifai.evidence.base import EvidenceRegistry
+from verifai.evidence.base import EvidenceProvider, EvidenceRegistry
 from verifai.experts.citation.decide import decide_doi, decide_reference, decide_url
 from verifai.experts.citation.extract import ExtractedCitation, extract_citations
 from verifai.experts.citation.providers.base import ProviderOutcome
@@ -59,7 +61,7 @@ class CitationExpert:
         "by comparing them with records retrieved from independent sources."
     )
 
-    def __init__(self, providers: list, *, max_concurrency: int = 4) -> None:
+    def __init__(self, providers: list[EvidenceProvider], *, max_concurrency: int = 4) -> None:
         self.registry = EvidenceRegistry()
         self._providers: dict[str, object] = {}
         for provider in providers:
@@ -114,14 +116,16 @@ class CitationExpert:
         return decide_doi(citation, outcomes)
 
     def _check_reference(self, citation: ExtractedCitation) -> CitationResult:
-        kwargs = {
-            "title": citation.title,
-            "authors": list(citation.surnames),
-            "year": citation.year,
-            "venue": citation.venue,
-            "raw": citation.raw,
-        }
-        searches = [
+        title = citation.title
+        authors = list(citation.surnames)
+        year = citation.year
+        venue = citation.venue
+        raw = citation.raw
+
+        def run(search: Callable[..., ProviderOutcome]) -> ProviderOutcome:
+            return search(title=title, authors=authors, year=year, venue=venue, raw=raw)
+
+        searches: list[Callable[..., ProviderOutcome]] = [
             self._crossref().search,
             self._openalex().search,
             self._datacite().search,
@@ -133,10 +137,10 @@ class CitationExpert:
         # until Crossref and OpenAlex have already finished, or a short
         # timeout will discard the year-matching preprint.
         if len(searches) == 1:
-            outcomes = [searches[0](**kwargs)]
+            outcomes = [run(searches[0])]
         else:
             with ThreadPoolExecutor(max_workers=len(searches)) as pool:
-                outcomes = list(pool.map(lambda search: search(**kwargs), searches))
+                outcomes = list(pool.map(run, searches))
         for outcome in outcomes:
             if outcome.unavailable and outcome.error:
                 log.info("provider %s unavailable: %s", outcome.source, outcome.error)
@@ -155,30 +159,32 @@ class CitationExpert:
         return decide_url(citation, live, wayback)
 
     def _doi(self) -> DoiOrgProvider:
-        return self._providers["doi.org"]  # type: ignore[return-value]
+        return cast("DoiOrgProvider", self._providers["doi.org"])
 
     def _crossref(self) -> CrossrefProvider:
-        return self._providers["crossref"]  # type: ignore[return-value]
+        return cast("CrossrefProvider", self._providers["crossref"])
 
     def _openalex(self) -> OpenAlexProvider:
-        return self._providers["openalex"]  # type: ignore[return-value]
+        return cast("OpenAlexProvider", self._providers["openalex"])
 
     def _datacite(self) -> DataCiteProvider:
-        return self._providers["datacite"]  # type: ignore[return-value]
+        return cast("DataCiteProvider", self._providers["datacite"])
 
     def _url(self) -> UrlLivenessProvider:
-        return self._providers["url"]  # type: ignore[return-value]
+        return cast("UrlLivenessProvider", self._providers["url"])
 
     def _wayback(self) -> WaybackProvider:
-        return self._providers["wayback"]  # type: ignore[return-value]
+        return cast("WaybackProvider", self._providers["wayback"])
 
     def _scholar(self) -> SemanticScholarProvider | None:
         provider = self._providers.get("semantic_scholar")
-        return provider  # type: ignore[return-value]
+        if provider is None:
+            return None
+        return cast("SemanticScholarProvider", provider)
 
 
 def build_citation_expert(http: PoliteHttp, settings: Settings) -> CitationExpert:
-    providers: list = [
+    providers: list[EvidenceProvider] = [
         DoiOrgProvider(http),
         CrossrefProvider(http),
         DataCiteProvider(http),
@@ -187,9 +193,7 @@ def build_citation_expert(http: PoliteHttp, settings: Settings) -> CitationExper
         WaybackProvider(http),
     ]
     if settings.semantic_scholar_api_key:
-        providers.append(
-            SemanticScholarProvider(http, api_key=settings.semantic_scholar_api_key)
-        )
+        providers.append(SemanticScholarProvider(http, api_key=settings.semantic_scholar_api_key))
     return CitationExpert(providers, max_concurrency=settings.max_concurrency)
 
 
@@ -217,18 +221,18 @@ def _summarize(citations: list[CitationResult], *, truncated: bool) -> ExpertRes
     total = len(citations)
     verdict, lead = _verdict(counts, total)
     pieces = [
-        f"Checked {total} citation{'s' if total != 1 else ''}: "
-        f"{counts[CitationStatus.VERIFIED]} verified, "
-        f"{counts[CitationStatus.PARTIALLY_MATCHES]} partially matching, "
-        f"{counts[CitationStatus.NOT_FOUND]} not found, "
-        f"{counts[CitationStatus.UNREACHABLE]} unreachable."
+        (
+            f"Checked {total} citation{'s' if total != 1 else ''}: "
+            f"{counts[CitationStatus.VERIFIED]} verified, "
+            f"{counts[CitationStatus.PARTIALLY_MATCHES]} partially matching, "
+            f"{counts[CitationStatus.NOT_FOUND]} not found, "
+            f"{counts[CitationStatus.UNREACHABLE]} unreachable."
+        )
     ]
     if truncated:
         pieces.append(f"Only the first {MAX_CITATIONS} citations were checked.")
     pieces.append(lead)
-    unavailable = ordered_sources(
-        name for item in citations for name in item.sources_unavailable
-    )
+    unavailable = ordered_sources(name for item in citations for name in item.sources_unavailable)
     if unavailable:
         labels = ", ".join(source_label(name) for name in unavailable)
         pieces.append(
@@ -248,8 +252,12 @@ def _summarize(citations: list[CitationResult], *, truncated: bool) -> ExpertRes
         confidence=confidence,
         explanation=" ".join(pieces),
         evidence=evidence,
-        sources_consulted=ordered_sources(name for item in citations for name in item.sources_consulted),
-        sources_contributed=ordered_sources(name for item in citations for name in item.sources_contributed),
+        sources_consulted=ordered_sources(
+            name for item in citations for name in item.sources_consulted
+        ),
+        sources_contributed=ordered_sources(
+            name for item in citations for name in item.sources_contributed
+        ),
         sources_unavailable=unavailable,
         citations=citations,
     )

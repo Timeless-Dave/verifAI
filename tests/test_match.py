@@ -1,11 +1,18 @@
-from verifai.experts.citation.match import assess, compare_authors, compare_venue, title_scores
-from verifai.experts.citation.match import Query
+from typing import Any
+
+from verifai.experts.citation.match import (
+    Query,
+    assess,
+    compare_authors,
+    compare_venue,
+    title_scores,
+)
 from verifai.experts.citation.providers.base import Record
 from verifai.schemas import CitationStatus
 
 
-def _record(**overrides) -> Record:
-    data = dict(
+def _record(**overrides: Any) -> Record:
+    record = Record(
         source="crossref",
         title="Attention Is All You Need",
         authors=["Ashish Vaswani", "Noam Shazeer"],
@@ -16,8 +23,9 @@ def _record(**overrides) -> Record:
         doi="10.48550/arxiv.1706.03762",
         url="https://doi.org/10.48550/arxiv.1706.03762",
     )
-    data.update(overrides)
-    return Record(**data)
+    for key, value in overrides.items():
+        setattr(record, key, value)
+    return record
 
 
 def test_exact_title_authors_and_year_verify():
@@ -89,7 +97,13 @@ def test_short_title_fragment_does_not_verify():
 
 
 def test_accent_folded_surnames_match():
-    query = Query(title="A programmable dual RNA guided DNA endonuclease", surnames=["Jinek"], year=2012, venue="Science", et_al=True)
+    query = Query(
+        title="A programmable dual RNA guided DNA endonuclease",
+        surnames=["Jinek"],
+        year=2012,
+        venue="Science",
+        et_al=True,
+    )
     record = _record(
         title="A programmable dual-RNA-guided DNA endonuclease in adaptive bacterial immunity",
         authors=["Martin Jínek"],

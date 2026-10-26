@@ -6,10 +6,11 @@ recollection of a paper, article, or claim.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 EVIDENCE_PRINCIPLE = (
     "Verdicts aggregate evidence from multiple independent sources, record "
@@ -66,7 +67,7 @@ def source_label(name: str) -> str:
     return SOURCE_LABELS.get(name, name)
 
 
-def ordered_sources(names: list[str]) -> list[str]:
+def ordered_sources(names: Iterable[str]) -> list[str]:
     rank = {name: index for index, name in enumerate(SOURCE_ORDER)}
     unique = list(dict.fromkeys(names))
     return sorted(unique, key=lambda name: (rank.get(name, 100), name))
@@ -114,7 +115,6 @@ class CitationResult(BaseModel):
     matched_url: str | None = None
 
     @computed_field
-    @property
     def status_label(self) -> str:
         return STATUS_LABELS[self.status]
 
@@ -141,13 +141,33 @@ class ExpertResult(BaseModel):
     evidence_principle: str = EVIDENCE_PRINCIPLE
 
     @computed_field
-    @property
     def verdict_label(self) -> str:
         return VERDICT_LABELS[self.verdict]
 
 
+def clean_paste(text: str) -> str:
+    """Strip surrounding space and refuse a null byte.
+
+    The character cap is applied by the route, because it comes from
+    settings. A null byte is rejected here so both the form and the JSON
+    API share one rule.
+    """
+    cleaned = text.strip()
+    if "\x00" in cleaned:
+        raise ValueError("The paste contains a null byte, which VerifAI will not check.")
+    return cleaned
+
+
 class CheckRequest(BaseModel):
     text: str
+
+    @field_validator("text")
+    @classmethod
+    def _clean_text(cls, value: str) -> str:
+        cleaned = clean_paste(value)
+        if not cleaned:
+            raise ValueError("Paste some text first.")
+        return cleaned
 
 
 class CheckResponse(BaseModel):

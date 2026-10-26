@@ -1,19 +1,31 @@
-name: Tests
+name: CI
 
 on:
   push:
   pull_request:
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        task: [lint, typecheck, test]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
       - name: Install dependencies
         run: uv sync --all-groups --frozen
-      - name: Run tests
+      - name: Lint
+        if: matrix.task == 'lint'
+        run: uv run ruff check && uv run ruff format --check
+      - name: Typecheck
+        if: matrix.task == 'typecheck'
+        run: uv run mypy
+      - name: Test
+        if: matrix.task == 'test'
         run: uv run pytest

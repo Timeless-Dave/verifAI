@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import respx
 from fastapi.testclient import TestClient
@@ -10,20 +12,21 @@ from verifai.http import PoliteHttp
 from verifai.main import create_app
 
 
-def make_settings(**overrides) -> Settings:
-    values = dict(
-        mailto="tests@example.com",
-        http_retries=0,
-        http_backoff_seconds=0.0,
-        cache_ttl_seconds=0,
-        negative_cache_ttl_seconds=0,
-        http_timeout=2.0,
-        max_concurrency=1,
-        semantic_scholar_api_key=None,
-        openalex_api_key=None,
-    )
+def make_settings(**overrides: Any) -> Settings:
+    values: dict[str, Any] = {
+        "mailto": "tests@example.com",
+        "http_retries": 0,
+        "http_backoff_seconds": 0.0,
+        "cache_ttl_seconds": 0,
+        "negative_cache_ttl_seconds": 0,
+        "http_timeout": 2.0,
+        "http_min_interval_seconds": 0.0,
+        "max_concurrency": 1,
+        "semantic_scholar_api_key": None,
+        "openalex_api_key": None,
+    }
     values.update(overrides)
-    return Settings(**values)
+    return Settings.model_validate(values)
 
 
 @pytest.fixture

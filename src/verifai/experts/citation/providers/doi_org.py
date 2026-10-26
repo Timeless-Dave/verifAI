@@ -29,14 +29,24 @@ class DoiOrgProvider:
         )
         if result.status_code == 404:
             return ProviderOutcome(self.name, unavailable=False, records=[])
-        if result.error is not None or result.status_code is None or result.status_code in RETRY_STATUSES:
-            return ProviderOutcome(self.name, unavailable=True, error=result.error or f"HTTP {result.status_code}")
+        if (
+            result.error is not None
+            or result.status_code is None
+            or result.status_code in RETRY_STATUSES
+        ):
+            return ProviderOutcome(
+                self.name, unavailable=True, error=result.error or f"HTTP {result.status_code}"
+            )
         if result.status_code != 200:
             return ProviderOutcome(self.name, unavailable=True, error=f"HTTP {result.status_code}")
         message = crossref_message(result.json_body())
         if message is None:
-            return ProviderOutcome(self.name, unavailable=True, error="doi.org response was not JSON")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="doi.org response was not JSON"
+            )
         record = record_from_crossref_like(self.name, message)
         if record is None:
-            return ProviderOutcome(self.name, unavailable=True, error="doi.org record had no title or DOI")
+            return ProviderOutcome(
+                self.name, unavailable=True, error="doi.org record had no title or DOI"
+            )
         return ProviderOutcome(self.name, unavailable=False, records=[record])

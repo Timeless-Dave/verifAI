@@ -1,11 +1,11 @@
 import httpx
-
 from tests.fakes import (
     ATTENTION_TITLE,
     JINEK_DOI,
     WIKI_URL,
     install,
 )
+
 from verifai.experts.citation.decide import (
     CONF_DOI_NOT_FOUND,
     CONF_DOI_VERIFIED_MULTI,
@@ -19,7 +19,7 @@ from verifai.experts.citation.decide import (
     CONF_URL_LIVE,
 )
 from verifai.sample import EXAMPLE_TEXT
-from verifai.schemas import CitationStatus, EVIDENCE_PRINCIPLE, Verdict
+from verifai.schemas import EVIDENCE_PRINCIPLE, CitationStatus, Verdict
 
 
 def _by_kind_marker(result):
@@ -43,7 +43,12 @@ def test_mixed_example_against_mocked_indexes(expert, http_mock):
     assert statuses.count(CitationStatus.VERIFIED) == 3
     assert statuses.count(CitationStatus.NOT_FOUND) == 3
 
-    attention = next(item for item in result.citations if item.matched_title == ATTENTION_TITLE or (item.title_like if False else "Attention" in item.raw))
+    attention = next(
+        item
+        for item in result.citations
+        if item.matched_title == ATTENTION_TITLE
+        or (item.title_like if False else "Attention" in item.raw)
+    )
     assert attention.status == CitationStatus.VERIFIED
     assert attention.matched_year == 2017
     assert attention.confidence == CONF_REFERENCE_VERIFIED_MULTI
@@ -51,12 +56,18 @@ def test_mixed_example_against_mocked_indexes(expert, http_mock):
     assert "openalex" in attention.sources_contributed
     assert "2025" in attention.explanation
 
-    jinek = next(item for item in result.citations if "endonuclease" in item.raw.lower() or "Jinek" in item.raw)
+    jinek = next(
+        item
+        for item in result.citations
+        if "endonuclease" in item.raw.lower() or "Jinek" in item.raw
+    )
     assert jinek.status == CitationStatus.VERIFIED
     assert jinek.matched_year == 2012
     assert "Science" in (jinek.matched_venue or "")
 
-    plos = next(item for item in result.citations if item.kind == "doi" and "journal.pone" in (item.raw))
+    plos = next(
+        item for item in result.citations if item.kind == "doi" and "journal.pone" in (item.raw)
+    )
     assert plos.status == CitationStatus.VERIFIED
     assert plos.confidence == CONF_DOI_VERIFIED_MULTI
     assert "doi.org" in plos.sources_contributed
@@ -95,7 +106,9 @@ def test_real_doi_with_wrong_title_is_partial(expert, http_mock):
     assert citation.matched_title and "Endonuclease" in citation.matched_title
 
 
-def test_reprint_in_the_indexes_does_not_override_a_year_matching_datacite_record(expert, http_mock):
+def test_reprint_in_the_indexes_does_not_override_a_year_matching_datacite_record(
+    expert, http_mock
+):
     install(http_mock, attention_indexes_reprint_only=True)
     text = (
         "Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., "
@@ -156,7 +169,9 @@ def test_crossref_alone_when_the_other_indexes_are_down(expert, http_mock):
     assert "openalex" in citation.sources_unavailable
     assert "datacite" in citation.sources_unavailable
     assert "crossref" in citation.sources_contributed
-    assert "one index" in citation.explanation.lower() or "unavailable" in citation.explanation.lower()
+    assert (
+        "one index" in citation.explanation.lower() or "unavailable" in citation.explanation.lower()
+    )
 
 
 def test_doi_org_outage_falls_back_to_crossref(expert, http_mock):
@@ -167,7 +182,7 @@ def test_doi_org_outage_falls_back_to_crossref(expert, http_mock):
     assert "doi.org" in citation.sources_unavailable
     assert "crossref" in citation.sources_contributed
     assert "openalex" in citation.sources_contributed
-    assert citation.confidence == CONF_DOI_VERIFIED_SINGLE_DOWN or citation.confidence == CONF_DOI_VERIFIED_MULTI
+    assert citation.confidence in {CONF_DOI_VERIFIED_SINGLE_DOWN, CONF_DOI_VERIFIED_MULTI}
     # OpenAlex still answered, and Crossref filled in for doi.org, so both contributed.
     assert citation.confidence == CONF_DOI_VERIFIED_MULTI
 
@@ -213,7 +228,9 @@ def test_year_mismatch_is_partial_when_every_record_disagrees(expert, http_mock)
 
 def test_live_url_does_not_call_wayback(expert, http_mock):
     install(http_mock)
-    http_mock.get("https://example.com/live-paper").mock(return_value=httpx.Response(200, text="ok"))
+    http_mock.get("https://example.com/live-paper").mock(
+        return_value=httpx.Response(200, text="ok")
+    )
     citation = expert.check("See https://example.com/live-paper for the note.").citations[0]
     assert citation.status == CitationStatus.VERIFIED
     assert citation.confidence == CONF_URL_LIVE
@@ -223,7 +240,9 @@ def test_live_url_does_not_call_wayback(expert, http_mock):
 
 def test_dead_url_with_snapshot_is_verified_via_wayback(expert, http_mock):
     install(http_mock)
-    http_mock.get("https://example.com/archived-page").mock(return_value=httpx.Response(404, text="gone"))
+    http_mock.get("https://example.com/archived-page").mock(
+        return_value=httpx.Response(404, text="gone")
+    )
     citation = expert.check("https://example.com/archived-page").citations[0]
     assert citation.status == CitationStatus.VERIFIED
     assert citation.confidence == CONF_URL_ARCHIVED

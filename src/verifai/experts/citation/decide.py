@@ -58,7 +58,9 @@ class _Scored:
     assessment: Assessment
 
 
-def decide_reference(citation: ExtractedCitation, outcomes: list[ProviderOutcome]) -> CitationResult:
+def decide_reference(
+    citation: ExtractedCitation, outcomes: list[ProviderOutcome]
+) -> CitationResult:
     consulted = ordered_sources([item.source for item in outcomes])
     unavailable = ordered_sources([item.source for item in outcomes if item.unavailable])
     contributed = ordered_sources([item.source for item in outcomes if item.contributed])
@@ -77,14 +79,18 @@ def decide_reference(citation: ExtractedCitation, outcomes: list[ProviderOutcome
 
     scored = _score_all(query, outcomes)
     if not scored:
-        return _not_found_or_unreachable(citation, query, outcomes, consulted, contributed, unavailable)
+        return _not_found_or_unreachable(
+            citation, query, outcomes, consulted, contributed, unavailable
+        )
 
     scored.sort(key=_rank, reverse=True)
     best = scored[0]
     supporters = _supporters(best, scored)
     contradictors = _contradictors(best, scored, supporters)
-    support_sources = ordered_sources([best.record.source, *[item.record.source for item in supporters]])
-    band = _band(len(support_sources), bool(unavailable))
+    support_sources = ordered_sources(
+        [best.record.source, *[item.record.source for item in supporters]]
+    )
+    band = _band(len(support_sources), any_down=bool(unavailable))
 
     status = best.assessment.status
     mismatches = list(best.assessment.mismatches)
@@ -282,10 +288,10 @@ def decide_url(
             )
             confidence = CONF_URL_ARCHIVED_UNCONFIRMED
         else:
-            detail = live.error or (f"HTTP {live.status_code}" if live.status_code else "a network error")
-            explanation = (
-                f"The live fetch failed ({detail}), but the Wayback Machine has a snapshot from {when}."
+            detail = live.error or (
+                f"HTTP {live.status_code}" if live.status_code else "a network error"
             )
+            explanation = f"The live fetch failed ({detail}), but the Wayback Machine has a snapshot from {when}."
             confidence = CONF_URL_ARCHIVED_UNCONFIRMED
         return _result(
             citation,
@@ -314,9 +320,13 @@ def decide_url(
         )
 
     if live.status_code in {404, 410} or (
-        live.status_code is not None and 400 <= live.status_code < 500 and live.status_code not in {401, 403}
+        live.status_code is not None
+        and 400 <= live.status_code < 500
+        and live.status_code not in {401, 403}
     ):
-        confidence = CONF_URL_NOT_FOUND if "wayback" in contributed else CONF_NOT_FOUND_PARTIAL_OUTAGE
+        confidence = (
+            CONF_URL_NOT_FOUND if "wayback" in contributed else CONF_NOT_FOUND_PARTIAL_OUTAGE
+        )
         extra = ""
         if "wayback" in unavailable:
             extra = " The Wayback Machine did not answer, so this is less certain."
@@ -368,7 +378,9 @@ def _doi_not_registered(
         if others:
             explanation += f" {join_and(others)} also had no record."
         if unavailable:
-            explanation += f" {join_and([source_label(name) for name in unavailable])} did not answer."
+            explanation += (
+                f" {join_and([source_label(name) for name in unavailable])} did not answer."
+            )
         confidence = CONF_DOI_NOT_FOUND_PARTIAL_OUTAGE if unavailable else CONF_DOI_NOT_FOUND
     return _result(
         citation,
@@ -438,7 +450,7 @@ def _not_found_or_unreachable(
     title = query.title or citation.raw
     explanation = f"No record in the sources that answered is close enough to “{title}”."
     if closest is not None and closest.title and closest_score >= 0.35:
-        year = closest.year if closest.year else "year unknown"
+        year = closest.year or "year unknown"
         percent = round(closest_score * 100)
         explanation += (
             f" Closest was “{closest.title}” ({source_label(closest.source)}, {year}), "
@@ -484,10 +496,7 @@ def _reference_explanation(
             if item.contributed and item.source not in support_sources
         ]
         if down:
-            follow = (
-                f"Found in {labels[0]}. {_down_phrase(outcomes)} "
-                "This rests on one index."
-            )
+            follow = f"Found in {labels[0]}. {_down_phrase(outcomes)} This rests on one index."
         elif silent:
             follow = (
                 f"Found in {labels[0]}. {join_and(silent)} answered but did not corroborate "
@@ -509,7 +518,7 @@ def _score_all(query: Query, outcomes: list[ProviderOutcome]) -> list[_Scored]:
     return scored
 
 
-def _rank(item: _Scored) -> tuple:
+def _rank(item: _Scored) -> tuple[int, float, int]:
     status_rank = 2 if item.assessment.status == CitationStatus.VERIFIED else 1
     return (status_rank, item.assessment.title_blend, -len(item.assessment.mismatches))
 
@@ -524,7 +533,9 @@ def _supporters(best: _Scored, scored: list[_Scored]) -> list[_Scored]:
     return found
 
 
-def _contradictors(best: _Scored, scored: list[_Scored], supporters: list[_Scored]) -> list[_Scored]:
+def _contradictors(
+    best: _Scored, scored: list[_Scored], supporters: list[_Scored]
+) -> list[_Scored]:
     supporter_ids = {id(item) for item in supporters}
     found: list[_Scored] = []
     for item in scored:
@@ -540,9 +551,7 @@ def _same_work(left: Record, right: Record) -> bool:
     right_doi = canonical_doi(right.doi)
     if left_doi and right_doi and left_doi == right_doi:
         return True
-    if left.title and right.title and title_scores(left.title, right.title).blend >= 0.90:
-        return True
-    return False
+    return bool(left.title and right.title and title_scores(left.title, right.title).blend >= 0.90)
 
 
 def _edition_notes(best: Record, scored: list[_Scored]) -> list[str]:
@@ -593,7 +602,7 @@ def _reference_confidence(status: CitationStatus, band: str) -> float:
     return table.get((status, band), CONF_REFERENCE_PARTIAL_SINGLE)
 
 
-def _band(n_support: int, any_down: bool) -> str:
+def _band(n_support: int, *, any_down: bool) -> str:
     if n_support >= 2:
         return "multi"
     if any_down:
@@ -654,7 +663,9 @@ def _links(records: list[Record]) -> list[Link]:
     for record in records:
         if record.doi:
             add("DOI record", f"https://doi.org/{record.doi}")
-        if record.url and record.url.rstrip("/") != f"https://doi.org/{record.doi or ''}".rstrip("/"):
+        if record.url and record.url.rstrip("/") != f"https://doi.org/{record.doi or ''}".rstrip(
+            "/"
+        ):
             add(source_label(record.source), record.url)
     return links
 
@@ -695,10 +706,11 @@ def _result(
 
 
 def _down_phrase(outcomes: list[ProviderOutcome]) -> str:
-    parts = []
-    for item in outcomes:
-        if item.unavailable:
-            parts.append(f"{source_label(item.source)} was unavailable ({item.error or 'no response'})")
+    parts = [
+        f"{source_label(item.source)} was unavailable ({item.error or 'no response'})"
+        for item in outcomes
+        if item.unavailable
+    ]
     if not parts:
         return ""
     return join_and(parts) + "."
@@ -712,9 +724,7 @@ def _outage_sentence(outcomes: list[ProviderOutcome]) -> str:
     ]
     if not parts:
         return "The bibliographic sources did not answer, so this citation was not judged real or fabricated."
-    return (
-        f"{join_and(parts)} did not answer, so this citation was not judged real or fabricated."
-    )
+    return f"{join_and(parts)} did not answer, so this citation was not judged real or fabricated."
 
 
 def _url_outage_sentence(live: UrlCheck, wayback: WaybackHit | None) -> str:

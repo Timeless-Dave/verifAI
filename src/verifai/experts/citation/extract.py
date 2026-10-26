@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import urlparse
 
 from verifai.experts.citation.textnorm import word_count
@@ -33,14 +34,66 @@ _BULLET_RE = re.compile(r"^(?:[-*•]+|\d+[.)]|\[\d+\])\s+")
 _DOI_HOSTS = {"doi.org", "dx.doi.org", "www.doi.org"}
 
 _STOP_AUTHORS = {
-    "january", "february", "march", "april", "may", "june", "july", "august",
-    "september", "october", "november", "december",
-    "the", "a", "an", "and", "but", "for", "from", "with", "this", "that",
-    "these", "those", "however", "although", "because", "while", "after",
-    "before", "during", "since", "until", "in", "on", "at", "by", "we",
-    "they", "he", "she", "it", "see", "also", "note", "figure", "table",
-    "chapter", "section", "page", "vol", "volume", "issue", "pp", "ed",
-    "retrieved", "available", "http", "https", "doi",
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "the",
+    "a",
+    "an",
+    "and",
+    "but",
+    "for",
+    "from",
+    "with",
+    "this",
+    "that",
+    "these",
+    "those",
+    "however",
+    "although",
+    "because",
+    "while",
+    "after",
+    "before",
+    "during",
+    "since",
+    "until",
+    "in",
+    "on",
+    "at",
+    "by",
+    "we",
+    "they",
+    "he",
+    "she",
+    "it",
+    "see",
+    "also",
+    "note",
+    "figure",
+    "table",
+    "chapter",
+    "section",
+    "page",
+    "vol",
+    "volume",
+    "issue",
+    "pp",
+    "ed",
+    "retrieved",
+    "available",
+    "http",
+    "https",
+    "doi",
 }
 
 
@@ -101,7 +154,9 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         if _overlaps(match.start(), match.end(), occupied):
             continue
         line_start, line_end = _line_bounds(normalized, match.start(), match.end())
-        if _overlaps(line_start, line_end, occupied) or _overlaps(match.start(), match.end(), occupied):
+        if _overlaps(line_start, line_end, occupied) or _overlaps(
+            match.start(), match.end(), occupied
+        ):
             continue
         # A URL sitting on a line we already accepted as a reference or DOI
         # belongs to that citation. Compare against line spans we stored.
@@ -143,21 +198,23 @@ def _find_references(text: str) -> list[ExtractedCitation]:
     found: list[ExtractedCitation] = []
     for match in _YEAR_PAREN_RE.finditer(text):
         window_start = max(0, match.start() - 500)
-        prefix = text[window_start:match.start()]
+        prefix = text[window_start : match.start()]
         head = _author_segment(prefix)
         if not head:
             continue
         surnames, et_al = _surnames(head)
         if not surnames and not et_al:
             continue
-        title, venue = _split_title_venue(text[match.end():])
+        title, venue = _split_title_venue(text[match.end() :])
         if not title:
             continue
         head_index = prefix.rfind(head)
         start = window_start + head_index if head_index >= 0 else match.start()
         end = min(len(text), match.end() + len(title) + 2)
         year = int(match.group(1))
-        raw = _clip(" ".join(part for part in (head, f"({year}).", title + ".", venue or "") if part))
+        raw = _clip(
+            " ".join(part for part in (head, f"({year}).", title + ".", venue or "") if part)
+        )
         found.append(
             ExtractedCitation(
                 kind="reference",
@@ -199,7 +256,7 @@ def _find_references(text: str) -> list[ExtractedCitation]:
     return _drop_overlaps(found)
 
 
-def _parse_bibliographic(line: str) -> dict:
+def _parse_bibliographic(line: str) -> dict[str, Any]:
     """Best-effort metadata for a line that already has a DOI or URL."""
     cleaned = _URL_RE.sub(" ", line)
     cleaned = _DOI_RE.sub(" ", cleaned)
@@ -208,7 +265,7 @@ def _parse_bibliographic(line: str) -> dict:
     if match:
         head = _author_segment(cleaned[: match.start()])
         surnames, et_al = _surnames(head)
-        title, venue = _split_title_venue(cleaned[match.end():])
+        title, venue = _split_title_venue(cleaned[match.end() :])
         if title and (surnames or et_al):
             return {
                 "title": title,
@@ -241,9 +298,7 @@ def _author_segment(prefix: str) -> str:
     # Split on sentence endings, but not on initials ("A. N." or "J.").
     # The two-character lookbehind sees the letter before the period.
     parts = [
-        part.strip()
-        for part in re.split(r"(?<![A-Z][.?!])(?<=[.?!])\s+", text)
-        if part.strip()
+        part.strip() for part in re.split(r"(?<![A-Z][.?!])(?<=[.?!])\s+", text) if part.strip()
     ]
     if not parts:
         return ""
@@ -253,7 +308,7 @@ def _author_segment(prefix: str) -> str:
     segment = _BULLET_RE.sub("", segment).strip(" \t:—–-")
     surname = _SURNAME_RE.search(segment) or _ET_AL_RE.search(segment)
     if surname and surname.start() > 0:
-        segment = segment[surname.start():].strip()
+        segment = segment[surname.start() :].strip()
     return segment
 
 
@@ -288,7 +343,7 @@ def _split_title_venue(rest: str) -> tuple[str | None, str | None]:
         if not matched:
             return None, None
         title = matched.group(1).strip(" \"“”'")
-        tail = rest[matched.end():]
+        tail = rest[matched.end() :]
     if word_count(title) < 3 or len(title) < 12:
         return None, None
     tail = tail.split("\n", 1)[0]
@@ -309,9 +364,7 @@ def _narrative_ok(match: re.Match[str]) -> bool:
     if word_count(title) < 4:
         return False
     venue = match.group("venue").strip()
-    if not venue or venue.split()[0].casefold() in _STOP_AUTHORS:
-        return False
-    return True
+    return bool(venue) and venue.split()[0].casefold() not in _STOP_AUTHORS
 
 
 def _normalize(text: str) -> str:
@@ -326,9 +379,10 @@ def _normalize(text: str) -> str:
 
 
 def _dedupe(items: list[ExtractedCitation]) -> list[ExtractedCitation]:
-    seen: set[tuple] = set()
+    seen: set[tuple[str, str] | tuple[str, str, int]] = set()
     kept: list[ExtractedCitation] = []
     for item in items:
+        key: tuple[str, str] | tuple[str, str, int]
         if item.kind == "doi" and item.doi:
             key = ("doi", item.doi.lower())
         elif item.kind == "url" and item.url:

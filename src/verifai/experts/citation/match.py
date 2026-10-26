@@ -191,7 +191,7 @@ def _author_message(query: Query, record: Record, status: str) -> str:
 def _year_label(record: Record) -> str:
     if record.year is None:
         return "an unknown year"
-    if len(record.years) > 1 and record.year not in (None,):
+    if len(record.years) > 1 and record.year is not None:
         extras = [str(year) for year in record.years if year != record.year]
         if extras:
             return f"{record.year} (also {', '.join(extras)})"

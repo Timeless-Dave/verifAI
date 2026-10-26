@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from verifai.experts.citation.providers.base import Record
 from verifai.experts.citation.textnorm import canonical_doi, surname_from_display
 
 
-def record_from_crossref_like(source: str, payload: dict) -> Record | None:
+def record_from_crossref_like(source: str, payload: object) -> Record | None:
     if not isinstance(payload, dict):
         return None
     title = _first_str(payload.get("title"))
@@ -35,7 +37,7 @@ def record_from_crossref_like(source: str, payload: dict) -> Record | None:
     )
 
 
-def record_from_openalex(work: dict) -> Record | None:
+def record_from_openalex(work: object) -> Record | None:
     if not isinstance(work, dict):
         return None
     title = work.get("display_name") or work.get("title")
@@ -81,7 +83,7 @@ def record_from_openalex(work: dict) -> Record | None:
     )
 
 
-def record_from_semantic_scholar(paper: dict) -> Record | None:
+def record_from_semantic_scholar(paper: object) -> Record | None:
     if not isinstance(paper, dict):
         return None
     title = paper.get("title")
@@ -98,9 +100,13 @@ def record_from_semantic_scholar(paper: dict) -> Record | None:
         authors.append(name.strip())
         surnames.append(surname_from_display(name))
     year = paper.get("year") if isinstance(paper.get("year"), int) else None
-    venue = paper.get("venue") if isinstance(paper.get("venue"), str) and paper.get("venue") else None
-    external = paper.get("externalIds") if isinstance(paper.get("externalIds"), dict) else {}
-    doi = external.get("DOI") if isinstance(external.get("DOI"), str) else None
+    venue = (
+        paper.get("venue") if isinstance(paper.get("venue"), str) and paper.get("venue") else None
+    )
+    raw_external = paper.get("externalIds")
+    external = raw_external if isinstance(raw_external, dict) else {}
+    raw_doi = external.get("DOI")
+    doi = raw_doi if isinstance(raw_doi, str) else None
     url = paper.get("url") if isinstance(paper.get("url"), str) else None
     if url is None and doi:
         url = f"https://doi.org/{doi}"
@@ -118,7 +124,7 @@ def record_from_semantic_scholar(paper: dict) -> Record | None:
     )
 
 
-def record_from_datacite(item: dict) -> Record | None:
+def record_from_datacite(item: object) -> Record | None:
     """Parse one DataCite JSON:API resource.
 
     Venue comes from ``container.title`` only. The publisher field is often
@@ -133,7 +139,11 @@ def record_from_datacite(item: dict) -> Record | None:
     titles = payload.get("titles")
     if isinstance(titles, list):
         for entry in titles:
-            if isinstance(entry, dict) and isinstance(entry.get("title"), str) and entry["title"].strip():
+            if (
+                isinstance(entry, dict)
+                and isinstance(entry.get("title"), str)
+                and entry["title"].strip()
+            ):
                 title = entry["title"].strip()
                 break
     doi = payload.get("doi") if isinstance(payload.get("doi"), str) else None
@@ -143,9 +153,17 @@ def record_from_datacite(item: dict) -> Record | None:
     year = _datacite_year(payload.get("publicationYear"))
     venue = None
     container = payload.get("container")
-    if isinstance(container, dict) and isinstance(container.get("title"), str) and container["title"].strip():
+    if (
+        isinstance(container, dict)
+        and isinstance(container.get("title"), str)
+        and container["title"].strip()
+    ):
         venue = container["title"].strip()
-    url = payload.get("url") if isinstance(payload.get("url"), str) and payload["url"].strip() else None
+    url = (
+        payload.get("url")
+        if isinstance(payload.get("url"), str) and payload["url"].strip()
+        else None
+    )
     if url is None and doi:
         url = f"https://doi.org/{doi}"
     return Record(
@@ -162,7 +180,7 @@ def record_from_datacite(item: dict) -> Record | None:
     )
 
 
-def crossref_message(data: dict | list | None) -> dict | None:
+def crossref_message(data: object) -> dict[Any, Any] | None:
     if not isinstance(data, dict):
         return None
     message = data.get("message")
@@ -173,7 +191,7 @@ def crossref_message(data: dict | list | None) -> dict | None:
     return None
 
 
-def _datacite_creators(value) -> tuple[list[str], list[str]]:
+def _datacite_creators(value: object) -> tuple[list[str], list[str]]:
     authors: list[str] = []
     surnames: list[str] = []
     if not isinstance(value, list):
@@ -197,7 +215,7 @@ def _datacite_creators(value) -> tuple[list[str], list[str]]:
     return authors, surnames
 
 
-def _datacite_year(value) -> int | None:
+def _datacite_year(value: object) -> int | None:
     if isinstance(value, int) and 1000 <= value <= 2100:
         return value
     if isinstance(value, str) and value.isdigit():
@@ -207,7 +225,7 @@ def _datacite_year(value) -> int | None:
     return None
 
 
-def _crossref_authors(value) -> tuple[list[str], list[str]]:
+def _crossref_authors(value: object) -> tuple[list[str], list[str]]:
     authors: list[str] = []
     surnames: list[str] = []
     if not isinstance(value, list):
@@ -227,7 +245,7 @@ def _crossref_authors(value) -> tuple[list[str], list[str]]:
     return authors, surnames
 
 
-def _years(payload: dict) -> list[int]:
+def _years(payload: dict[Any, Any]) -> list[int]:
     years: list[int] = []
     for key in ("published-print", "published-online", "issued", "published", "created"):
         year = _year_from_date(payload.get(key))
@@ -236,7 +254,7 @@ def _years(payload: dict) -> list[int]:
     return years
 
 
-def _year_from_date(value) -> int | None:
+def _year_from_date(value: object) -> int | None:
     if not isinstance(value, dict):
         return None
     parts = value.get("date-parts") or value.get("date_parts")
@@ -247,7 +265,7 @@ def _year_from_date(value) -> int | None:
     return None
 
 
-def _first_str(value) -> str | None:
+def _first_str(value: object) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()
     if isinstance(value, list):

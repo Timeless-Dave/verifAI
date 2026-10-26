@@ -1,4 +1,5 @@
 from tests.fakes import install
+
 from verifai.sample import EXAMPLE_TEXT
 
 
@@ -45,8 +46,30 @@ def test_homepage_and_form_and_json(client, http_mock):
     blank = client.post("/api/v1/check", json={"text": "  "})
     assert blank.status_code == 422
 
+    hostile = client.post("/api/v1/check", json={"text": "Smith (2020).\x00"})
+    assert hostile.status_code == 422
+    assert "null byte" in hostile.text
+
+    form = client.post("/check", data={"text": "Smith (2020).\x00"})
+    assert form.status_code == 200
+    assert "null byte" in form.text
+
+    limit = client.app.state.settings.max_text_chars
+    too_long = client.post("/api/v1/check", json={"text": "a" * (limit + 1)})
+    assert too_long.status_code == 422
+    assert f"{limit:,}" in too_long.text
+
+    huge = b'{"text":"' + (b"a" * (client.app.state.settings.max_body_bytes + 8))
+    oversized = client.post(
+        "/api/v1/check",
+        content=huge,
+        headers={"content-type": "application/json"},
+    )
+    assert oversized.status_code == 413
+
     health = client.get("/health")
     assert health.status_code == 200
+    assert health.headers["x-request-id"]
     payload = health.json()
     assert payload["status"] == "ok"
     assert "crossref" in payload["providers"]
