@@ -1,0 +1,54 @@
+[project]
+name = "verifai"
+version = "0.1.0"
+description = "Self-hosted information verification. Verdicts come from retrieved evidence, not from a model's memory."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "VerifAI contributors" }]
+keywords = ["fact-checking", "citations", "verification", "self-hosted"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "fastapi>=0.115.0",
+  "httpx>=0.27.0",
+  "jinja2>=3.1.4",
+  "pydantic-settings>=2.6.0",
+  "python-multipart>=0.0.12",
+  "rapidfuzz>=3.10.0",
+  "uvicorn[standard]>=0.32.0",
+]
+
+[project.scripts]
+verifai = "verifai.main:run"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.0",
+  "respx>=0.21.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src/verifai"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/verifai/web/templates" = "verifai/web/templates"
+"src/verifai/web/static" = "verifai/web/static"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
