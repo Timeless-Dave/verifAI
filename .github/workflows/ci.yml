@@ -13,8 +13,13 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
         task: [lint, typecheck, test]
     steps:
+<<<<<<< HEAD
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
+=======
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+>>>>>>> origin/main
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
