@@ -6,6 +6,7 @@ Environment variables use the ``VERIFAI_`` prefix. See ``.env.example``.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,6 +37,16 @@ class Settings(BaseSettings):
     max_concurrency: int = Field(default=4, ge=1, le=16)
     openalex_api_key: str | None = None
     semantic_scholar_api_key: str | None = None
+    google_factcheck_api_key: str | None = None
+    model_backend: Literal["auto", "mlx", "ollama", "llamacpp", "nli", "none"] = "auto"
+    mlx_model: str = "mlx-community/Qwen3.5-9B-4bit"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen3.5:9b"
+    llamacpp_base_url: str = "http://127.0.0.1:8080/v1"
+    llamacpp_model: str = "qwen3.5-9b"
+    nli_model: str = "MoritzLaurer/DeBERTa-v3-small-mnli-fever-anli"
+    nli_enabled: bool = True
+    max_claims: int = Field(default=5, ge=1, le=20)
 
     @property
     def max_body_bytes(self) -> int:
