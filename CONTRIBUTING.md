@@ -33,6 +33,8 @@ make test
 
 Tests mock HTTP. They do not call the public APIs. `mypy` runs in strict mode. Ruff uses the rule set in `pyproject.toml`.
 
+`make bench` is local. CI does not run it. The metric and loader tests do run in CI, and they do not download datasets. See `docs/benchmark.md`.
+
 ## Commits
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `chore:`, `test:`, `ci:`, `docs:`, `refactor:`. The subject says what changed. The body says why.

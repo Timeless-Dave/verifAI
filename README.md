@@ -240,6 +240,8 @@ make test
 
 `make lint` runs ruff and `node --check` on the extension. `make typecheck` runs mypy in strict mode. `make test` runs the extension tests and pytest, and fails if branch coverage of `src/verifai` drops below 85%.
 
+`make bench` scores labeled claims by calling `run_check` and writes a JSON file plus a Markdown report under `results/`. It downloads datasets into `.cache/verifai-bench/` and is not part of CI. `docs/benchmark.md` explains the metrics, the label maps, and a 24 GB M5 Pro run. The default sample is 50 rows per dataset, seed 0, backend `none`.
+
 GitHub Actions (`.github/workflows/ci.yml`) runs the Python checks on 3.11, 3.12, and 3.13, and runs the extension lint and tests once. Tests do not touch the network or download a model. Provider payloads in `tests/fakes.py` follow the JSON shapes returned by doi.org, Crossref, OpenAlex, and DataCite. Claim providers are stubbed the same way.
 
 `pre-commit install` runs the same ruff and mypy checks on each commit. The hooks call `uv run`, so `make install` has to have succeeded first.
