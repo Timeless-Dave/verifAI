@@ -1,0 +1,16 @@
+{"id": "attention-doi", "label": "supported", "text": "https://doi.org/10.48550/arXiv.1706.03762", "note": "Vaswani et al. 2017. Real arXiv DOI."}
+{"id": "jinek-doi", "label": "supported", "text": "https://doi.org/10.1126/science.1225829", "note": "Jinek et al. 2012, Science. Real DOI."}
+{"id": "plos-doi", "label": "supported", "text": "https://doi.org/10.1371/journal.pone.0000217", "note": "Real PLOS ONE DOI used by the app's example paste."}
+{"id": "nature-deeplearning-doi", "label": "supported", "text": "10.1038/nature14539", "note": "LeCun, Bengio, and Hinton, Deep learning, Nature 2015."}
+{"id": "ioannidis-doi", "label": "supported", "text": "10.1371/journal.pmed.0020124", "note": "Ioannidis, Why Most Published Research Findings Are False, PLOS Medicine 2005."}
+{"id": "attention-apa", "label": "supported", "text": "Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2017). Attention is all you need. Advances in Neural Information Processing Systems, 30.", "note": "Real paper, bibliographic form, year agrees."}
+{"id": "jinek-narrative", "label": "supported", "text": "Jinek et al., 2012, Science, A programmable dual-RNA-guided DNA endonuclease in adaptive bacterial immunity.", "note": "Real paper, narrative citation."}
+{"id": "wiki-crispr", "label": "supported", "text": "https://en.wikipedia.org/wiki/CRISPR", "note": "Real Wikipedia page. Supported means the URL resolves, which is what the citation checker answers."}
+{"id": "fake-doi-1234", "label": "refuted", "text": "10.1234/verifai.fabricated.2021", "note": "Unregistered DOI written for this set."}
+{"id": "fake-doi-9999", "label": "refuted", "text": "10.9999/verifai.no-such-record.2024", "note": "Unregistered DOI written for this set."}
+{"id": "sourdough", "label": "refuted", "text": "Smith, J. & Doe, A. (2019). Quantum entanglement in household sourdough starters. Journal of Improbable Culinary Physics, 4(2), 11-19.", "note": "Fabricated bibliographic reference from the app's example paste."}
+{"id": "office-ferns", "label": "refuted", "text": "Patel, R. (2018). Lunar photosynthesis in office ferns. Annals of Indoor Astronomy.", "note": "Fabricated bibliographic reference written for this set."}
+{"id": "bluetooth-hair", "label": "refuted", "text": "Nguyen et al., 2020, Journal of Fabricated Medicine, Reversing gray hair with bluetooth toothbrushes.", "note": "Fabricated narrative citation written for this set."}
+{"id": "wiki-missing", "label": "refuted", "text": "https://en.wikipedia.org/wiki/VerifAI_missing_citation_page_9f3c", "note": "URL written so it does not name a Wikipedia page."}
+{"id": "attention-wrong-year", "label": "unverified", "text": "Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2014). Attention is all you need. Advances in Neural Information Processing Systems, 30.", "note": "Real paper, wrong year on purpose."}
+{"id": "jinek-doi-wrong-title", "label": "unverified", "text": "Smith, J. & Doe, A. (2019). Quantum entanglement in household sourdough starters. Journal of Improbable Culinary Physics, 4(2), 11-19. https://doi.org/10.1126/science.1225829", "note": "Real DOI with a fabricated title printed beside it."}
