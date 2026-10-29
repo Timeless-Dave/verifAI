@@ -323,6 +323,29 @@ code {
 .links { margin: 0; }
 .links a { margin-right: 12px; }
 
+.claim {
+  margin: 16px 0 24px;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.claim h2 {
+  font-size: 22px;
+}
+
+.sources {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.sources li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.speaker, .sources .kind { display: block; }
+
 .legend {
   margin: 12px 0 40px;
   padding-top: 8px;

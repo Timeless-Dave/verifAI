@@ -3,7 +3,40 @@
 {% elif results is not none and results|length == 0 %}
 <p class="banner" role="status">No checker is registered for this paste yet.</p>
 {% elif results %}
+  {% if combined %}
+  <section class="verdict verdict-{{ verdict.value }}" aria-live="polite">
+    <p class="kicker">Verdict · {% if verdict.value == "unverifiable" %}Unverified{% else %}{{ verdict.value|replace("_", " ")|title }}{% endif %} · {{ confidence|pct }}</p>
+    <p>{{ explanation }}</p>
+  </section>
+  {% for claim in combined %}
+  <section class="claim">
+    <h2>{{ claim.claim }}</h2>
+    <p class="kicker">{{ claim.verdict_label }} · {{ claim.experts|join(", ") }}</p>
+    {% if claim.explanation != explanation %}<p>{{ claim.explanation }}</p>{% endif %}
+    <ul class="sources">
+      {% for item in claim.evidence %}
+      <li>
+        <span class="kind">{{ source_label(item.source) }}{% if item.speaker %} · {{ item.speaker }}{% endif %}</span>
+        {% if item.url %}
+        <a href="{{ item.url }}" rel="noopener noreferrer">{{ item.title or item.url }}</a>
+        {% elif item.title %}
+        <span>{{ item.title }}</span>
+        {% endif %}
+        {% if item.stance and item.stance != "neutral" %}<span class="chip">{{ item.stance }}</span>{% endif %}
+        {% if item.snippet %}<p class="muted">{{ item.snippet }}</p>{% endif %}
+      </li>
+      {% else %}
+      <li class="muted">No passage was retrieved for this claim.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+  {% if results|selectattr("expert", "equalto", "health")|list %}
+  <p class="banner banner-note">This is not medical advice. It does not diagnose, treat, or recommend care.</p>
+  {% endif %}
+  {% endif %}
   {% for result in results %}
+  {% if result.verdict_scope == "citations" %}
   <section class="verdict verdict-{{ result.verdict.value }}" aria-live="polite">
     <p class="kicker">Citation verdict · {{ result.verdict_label }} · {{ result.confidence|pct }}</p>
     <p>{{ result.explanation }}</p>
@@ -89,6 +122,7 @@
       </tbody>
     </table>
   </div>
+  {% endif %}
   {% endif %}
   {% endfor %}
 {% endif %}

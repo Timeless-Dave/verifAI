@@ -16,9 +16,13 @@ from fastapi.staticfiles import StaticFiles
 from verifai import __version__
 from verifai.config import Settings, get_settings
 from verifai.experts.citation import build_citation_expert
+from verifai.experts.general import build_general_expert
+from verifai.experts.health import build_health_expert
+from verifai.experts.news import build_news_expert
 from verifai.experts.router import Router
 from verifai.http import PoliteHttp
 from verifai.logging import configure_logging, request_id_var
+from verifai.models.judge import build_judge
 from verifai.web.limits import BodySizeLimitMiddleware
 from verifai.web.request_id import RequestIdMiddleware, request_id_from_scope
 from verifai.web.routes import STATIC_DIR, build_web_router
@@ -62,14 +66,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         http = PoliteHttp(settings)
-        expert = build_citation_expert(http, settings)
+        judge = build_judge(settings)
+        citation = build_citation_expert(http, settings)
+        general = build_general_expert(http, settings, judge)
+        health = build_health_expert(http, settings, judge)
+        news = build_news_expert(http, settings, judge)
         app.state.settings = settings
         app.state.http = http
-        app.state.router = Router([expert])
+        app.state.judge = judge
+        app.state.router = Router([citation, general, health, news])
         log.info(
-            "VerifAI %s ready. Providers: %s",
+            "VerifAI %s ready. Model: %s. Experts: citation, general, health, news.",
             settings.app_version,
-            ", ".join(expert.registry.names()),
+            judge.name,
         )
         try:
             yield
@@ -79,7 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="VerifAI",
         version=settings.app_version,
-        summary="Self-hosted citation checks. Verdicts come from retrieved records.",
+        summary="Self-hosted claim checks. Verdicts come from retrieved records.",
         lifespan=lifespan,
     )
     app.include_router(build_web_router())
