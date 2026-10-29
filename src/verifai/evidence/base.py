@@ -4,8 +4,8 @@ A checker calls every provider that is relevant to the question, records
 which ones answered, and aggregates those answers. Providers do not see
 each other's responses and do not emit the final verdict.
 
-The Google Fact Check Tools API is a possible future provider. It must be
-registered beside other providers and must never be the sole decider.
+The Google Fact Check Tools API is one provider among others. It must never
+be the sole decider, and every review it returns still counts as one source.
 """
 
 from __future__ import annotations
@@ -22,9 +22,8 @@ class EvidenceProvider(Protocol):
 
     Implementations are interchangeable. Callers must keep working when
     ``unavailable`` is the only thing a provider can say, and must not
-    treat any single provider — including a future Google Fact Check
-    provider — as sufficient on its own when another configured provider
-    could have been asked.
+    treat any single provider — including a Google Fact Check provider —
+    as sufficient on its own. A claim verdict needs two independent sources.
     """
 
     name: str

@@ -9,11 +9,13 @@ from a language model's memory.
 Evidence providers are independent and pluggable. A verdict aggregates every
 provider that answered, records which sources were consulted and which ones
 contributed, and must still be produced when any single provider is
-unavailable. No provider — including a future Google Fact Check Tools
-provider — is allowed to be the sole decider. The citation expert cross-checks
-Crossref and OpenAlex rather than trusting either index alone, and also asks
-DataCite so a preprint those indexes miss is not judged only by a later
-reprint. A verdict is still produced when any one of them is down.
+unavailable. No provider — including a Google Fact Check Tools provider —
+is allowed to be the sole decider. A claim verdict other than unverified
+needs at least two independent sources that agree, and Google Fact Check
+counts as one source at most. The citation expert cross-checks Crossref and
+OpenAlex rather than trusting either index alone, and also asks DataCite so
+a preprint those indexes miss is not judged only by a later reprint. A
+verdict is still produced when any one of them is down.
 """
 
 from __future__ import annotations
@@ -30,11 +32,13 @@ class Expert(Protocol):
     Verdicts aggregate evidence from multiple independent sources, record
     which sources were consulted and which ones contributed, and must still
     be produced when any single provider is unavailable. No provider —
-    including a future Google Fact Check Tools provider — is the sole
-    decider. The citation expert cross-checks Crossref and OpenAlex rather
-    than trusting either index alone, and also asks DataCite so a preprint
-    those indexes miss is not judged only by a later reprint. A verdict is
-    still produced when any one of them is down.
+    including a Google Fact Check Tools provider — is the sole decider. A
+    claim verdict other than unverified needs at least two independent
+    sources that agree, and Google Fact Check counts as one source at most.
+    The citation expert cross-checks Crossref and OpenAlex rather than
+    trusting either index alone, and also asks DataCite so a preprint those
+    indexes miss is not judged only by a later reprint. A verdict is still
+    produced when any one of them is down.
     """
 
     name: str
