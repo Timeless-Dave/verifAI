@@ -2,7 +2,11 @@ UV ?= uv
 HOST ?= 127.0.0.1
 PORT ?= 8741
 
-.PHONY: install test lint typecheck check run dev extension-test extension-lint
+.PHONY: install test lint typecheck check run dev extension-test extension-lint bench
+
+# Local only. CI does not run this.
+# make bench BENCH_ARGS="--backend none --limit 50 --seed 0"
+BENCH_ARGS ?=
 
 install:
 	$(UV) sync --all-groups
@@ -30,3 +34,6 @@ run: install
 
 dev: install
 	VERIFAI_HOST=$(HOST) VERIFAI_PORT=$(PORT) $(UV) run uvicorn verifai.main:app --host $(HOST) --port $(PORT) --reload
+
+bench: install
+	$(UV) run python -m verifai.bench $(BENCH_ARGS)

@@ -11,3 +11,6 @@ build/
 htmlcov/
 .coverage
 .DS_Store
+.cache/
+results/*
+!results/README.md
