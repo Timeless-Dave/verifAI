@@ -16,9 +16,9 @@ EVIDENCE_PRINCIPLE = (
     "Verdicts aggregate evidence from multiple independent sources, record "
     "which sources were consulted and which ones contributed, and still come "
     "back when any single provider is unavailable. No provider is the sole "
-    "decider. The Google Fact Check Tools API, if it is added later, is one "
-    "more provider under this rule and must never be the only source a "
-    "verdict depends on."
+    "decider. A claim verdict other than unverified needs at least two "
+    "independent sources that agree. The Google Fact Check Tools API counts "
+    "as one source at most and must never be the only source a verdict depends on."
 )
 
 SOURCE_LABELS = {
@@ -29,6 +29,15 @@ SOURCE_LABELS = {
     "semantic_scholar": "Semantic Scholar",
     "url": "Direct fetch",
     "wayback": "Wayback Machine",
+    "wikipedia": "Wikipedia",
+    "wikidata": "Wikidata",
+    "wikipedia_current": "Wikipedia current events",
+    "google_factcheck": "Google Fact Check",
+    "page": "Linked page",
+    "article": "Article",
+    "pubmed": "PubMed",
+    "europepmc": "Europe PMC",
+    "gdelt": "GDELT",
 }
 
 SOURCE_ORDER = list(SOURCE_LABELS)
