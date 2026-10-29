@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "VerifAI",
+  "version": "0.2.0",
+  "description": "Check claims on news, health, and chatbot pages against a local VerifAI server.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_title": "VerifAI",
+    "default_popup": "src/popup.html"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/config.js", "src/heuristic.js", "src/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "verifai@localhost",
+      "strict_min_version": "115.0"
+    }
+  }
+}
