@@ -8,7 +8,7 @@ Please use [GitHub private vulnerability reporting](https://github.com/Timeless-
 
 ## What this process will fetch
 
-A check sends bibliographic queries to doi.org, Crossref, OpenAlex, and DataCite, and it may fetch a URL the user pasted. Semantic Scholar is contacted only when `VERIFAI_SEMANTIC_SCHOLAR_API_KEY` is set. Those requests leave the machine. Do not paste text you would not send to those services.
+A check can send queries to doi.org, Crossref, OpenAlex, DataCite, Wikipedia, Wikidata, PubMed, Europe PMC, GDELT, and the Wayback Machine, and it may fetch a URL the user pasted. Semantic Scholar is contacted only when `VERIFAI_SEMANTIC_SCHOLAR_API_KEY` is set. Google Fact Check is contacted only when `VERIFAI_GOOGLE_FACTCHECK_API_KEY` is set. A local model, when configured, is called on this machine (MLX in-process, or Ollama / llama.cpp on localhost). Those remote requests leave the machine. Do not paste text you would not send to those services.
 
 Pasted URLs are fetched only when they are public http(s) addresses. Local names, embedded passwords, and private, loopback, link-local, reserved, or multicast addresses are refused before any request. That check is not a promise against every SSRF trick. Keep the server bound to `127.0.0.1` unless you have your own network controls.
 
@@ -20,4 +20,4 @@ API keys belong in the environment or a local `.env` file, which is gitignored. 
 
 Request bodies and paste length are capped. Outbound calls use a connect timeout, a read timeout, a small retry budget, and a per-host gap. A response larger than the configured cap is discarded. These limits reduce accidental load. They are not an authorization system.
 
-No single bibliographic source is allowed to decide a verdict on its own. An outage is reported as unavailable, not as evidence that a citation is fabricated.
+No single source is allowed to decide a claim verdict on its own. Google Fact Check counts as one source. An outage is reported as unavailable, not as evidence that a citation is fabricated or that a claim is false.

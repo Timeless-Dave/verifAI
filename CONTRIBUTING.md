@@ -1,10 +1,12 @@
 # Contributing
 
-VerifAI is a student research project: a self-hosted citation checker. Verdicts come from records retrieved at check time. This version does not call a commercial model API (no OpenAI, Anthropic, Gemini, or similar).
+VerifAI is a student research project: a self-hosted claim checker. Verdicts come from records retrieved at check time. It does not call a commercial model API (no OpenAI, Anthropic, Gemini, or similar). A local model is optional and is not a source.
 
 ## Evidence principle
 
-No single source decides a verdict. A check records which providers were consulted, which ones contributed (including an authoritative not-found), and which ones were unavailable. The citation expert is constructed with doi.org, Crossref, DataCite, OpenAlex, a direct URL check, and the Wayback Machine. One index can still verify a citation when another is down, at lower confidence. It must not be the only provider the verdict depends on. A future Google Fact Check Tools provider would be one more source under the same rule.
+No single source decides a verdict. A check records which providers were consulted, which ones contributed (including an authoritative not-found), and which ones were unavailable. A claim verdict other than unverified needs at least two independent sources that agree. Google Fact Check reviews count as one source. The same paper from two indexes counts as one source. The function is `corroborate` in `src/verifai/corroboration.py`.
+
+The citation expert is constructed with doi.org, Crossref, DataCite, OpenAlex, a direct URL check, and the Wayback Machine. One index can still verify a citation when another is down, at lower confidence. That question is whether the reference exists, which is separate from whether the work supports a claim.
 
 The statement lives in `EVIDENCE_PRINCIPLE` in `src/verifai/schemas.py` and is repeated on the `Expert` and `EvidenceProvider` interfaces.
 
@@ -27,7 +29,7 @@ make typecheck
 make test
 ```
 
-`make lint` is `ruff check` and `ruff format --check`. `make typecheck` is `mypy` in strict mode. `make test` fails if branch coverage of `src/verifai` drops below 85%. `pre-commit install` runs the ruff and mypy hooks.
+`make lint` is `ruff check`, `ruff format --check`, and `node --check` on the extension. `make typecheck` is `mypy` in strict mode. `make test` runs the extension tests and fails if branch coverage of `src/verifai` drops below 85%. `pre-commit install` runs the ruff and mypy hooks.
 
 Tests mock HTTP. They do not call the public APIs. `mypy` runs in strict mode. Ruff uses the rule set in `pyproject.toml`.
 

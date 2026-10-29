@@ -1,7 +1,7 @@
 [project]
 name = "verifai"
-version = "0.1.0"
-description = "Self-hosted information verification. Verdicts come from retrieved evidence, not from a model's memory."
+version = "0.2.0"
+description = "Self-hosted claim verification. Verdicts come from retrieved evidence, not from a model's memory."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"

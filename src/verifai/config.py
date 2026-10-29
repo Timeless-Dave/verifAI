@@ -22,7 +22,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     mailto: str = "verifai-dev@example.com"
     host: str = "127.0.0.1"
     port: int = Field(default=8741, ge=1, le=65535)
