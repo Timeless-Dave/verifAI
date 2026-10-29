@@ -2,15 +2,21 @@ UV ?= uv
 HOST ?= 127.0.0.1
 PORT ?= 8741
 
-.PHONY: install test lint typecheck check run dev
+.PHONY: install test lint typecheck check run dev extension-test extension-lint
 
 install:
 	$(UV) sync --all-groups
 
-test: install
+extension-lint:
+	node --check extension/src/*.js
+
+extension-test:
+	node --test extension/test/*.test.js
+
+test: install extension-test
 	$(UV) run pytest
 
-lint: install
+lint: install extension-lint
 	$(UV) run ruff check
 	$(UV) run ruff format --check
 
