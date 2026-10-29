@@ -3,14 +3,14 @@
 {% block body %}
 <section class="intro">
   <div>
-    <p class="kicker">Citation checker</p>
+    <p class="kicker">Claim checker</p>
     <h1>Do these references exist?</h1>
-    <p class="lede">Paste a chatbot answer, a paragraph, or a reference list. VerifAI extracts DOIs, URLs, and bibliographic references, then asks more than one public index whether each one is real.</p>
+    <p class="lede">Paste a claim, a chatbot answer, or a link. VerifAI sends each claim to the matching checker, then shows one verdict with every source linked. A verdict other than unverified needs two independent sources that agree.</p>
   </div>
   <ol class="steps">
-    <li><strong>Extract with rules.</strong> DOIs, links, and references such as “Smith et al., 2021, Journal, Title”. No model is loaded.</li>
-    <li><strong>Ask independent sources.</strong> Free-text references are searched in Crossref and OpenAlex, and in DataCite so a preprint those indexes miss is not judged only by a later reprint. DOIs are resolved at doi.org and cross-checked in OpenAlex. No one of those sources decides alone.</li>
-    <li><strong>Keep going if one is down.</strong> A missing provider lowers confidence. It does not silently become the whole verdict. Google Fact Check, later, would be just another provider.</li>
+    <li><strong>Pick a checker.</strong> Health claims go to PubMed and Europe PMC. News and politics go to fact-check reviews, GDELT, and Wikipedia current events. Other claims use Wikipedia, Wikidata, and pages you pasted. Citations still go to Crossref and OpenAlex.</li>
+    <li><strong>Ask independent sources.</strong> Google Fact Check, when a key is set, counts as one source even if it returns several reviews. The same paper in two indexes counts once. No one of those sources decides alone.</li>
+    <li><strong>Keep going if one is down.</strong> A missing provider lowers confidence. It does not silently become the whole verdict. Without a local model, pages are listed but not judged.</li>
   </ol>
 </section>
 
@@ -22,7 +22,7 @@
   <label for="claim">Pasted text</label>
   <textarea id="claim" name="text" rows="12" required placeholder="Paste an answer that cites papers, DOIs, or links.">{{ text }}</textarea>
   <div class="form-row">
-    <button type="submit" class="primary">Check citations <span id="spinner" class="spinner htmx-indicator" aria-hidden="true"></span></button>
+    <button type="submit" class="primary">Check <span id="spinner" class="spinner htmx-indicator" aria-hidden="true"></span></button>
     <button type="button" class="ghost" data-load-example>Load an example</button>
     <p class="hint-inline">⌘/Ctrl + Enter</p>
   </div>

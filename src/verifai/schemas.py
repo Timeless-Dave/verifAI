@@ -96,6 +96,10 @@ class EvidenceItem(BaseModel):
     doi: str | None = None
     snippet: str | None = None
     score: float | None = None
+    stance: str | None = None
+    family: str | None = None
+    document_ids: list[str] = Field(default_factory=list)
+    speaker: str | None = None
 
 
 class Link(BaseModel):
@@ -148,6 +152,7 @@ class ExpertResult(BaseModel):
     sources_unavailable: list[str] = Field(default_factory=list)
     citations: list[CitationResult] = Field(default_factory=list)
     evidence_principle: str = EVIDENCE_PRINCIPLE
+    subject: str | None = None
 
     @computed_field
     def verdict_label(self) -> str:
@@ -179,5 +184,26 @@ class CheckRequest(BaseModel):
         return cleaned
 
 
+class CombinedClaim(BaseModel):
+    """One claim after every selected expert has been corroborated together."""
+
+    claim: str
+    verdict: Verdict
+    confidence: float = Field(ge=0, le=1)
+    explanation: str
+    evidence: list[EvidenceItem] = Field(default_factory=list)
+    experts: list[str] = Field(default_factory=list)
+
+    @computed_field
+    def verdict_label(self) -> str:
+        if self.verdict is Verdict.UNVERIFIABLE:
+            return "Unverified"
+        return VERDICT_LABELS[self.verdict]
+
+
 class CheckResponse(BaseModel):
     results: list[ExpertResult]
+    combined: list[CombinedClaim] = Field(default_factory=list)
+    verdict: Verdict | None = None
+    confidence: float | None = None
+    explanation: str = ""

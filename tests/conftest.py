@@ -24,6 +24,9 @@ def make_settings(**overrides: Any) -> Settings:
         "max_concurrency": 1,
         "semantic_scholar_api_key": None,
         "openalex_api_key": None,
+        "google_factcheck_api_key": None,
+        "model_backend": "none",
+        "nli_enabled": False,
     }
     values.update(overrides)
     return Settings.model_validate(values)

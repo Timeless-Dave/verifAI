@@ -122,6 +122,21 @@ def install(
     router.get(host="archive.org").mock(side_effect=wayback)
     router.get(url__startswith=WIKI_URL).mock(return_value=httpx.Response(404, text="missing"))
 
+    # Claim retrievers stay offline. The specific Wikipedia page route above
+    # is registered first, so the dead citation URL is still a 404.
+    def empty(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    for host in (
+        "en.wikipedia.org",
+        "www.wikidata.org",
+        "factchecktools.googleapis.com",
+        "eutils.ncbi.nlm.nih.gov",
+        "www.ebi.ac.uk",
+        "api.gdeltproject.org",
+    ):
+        router.get(host=host).mock(side_effect=empty)
+
 
 def _datacite_title(query: str) -> str:
     marker = 'titles.title:"'

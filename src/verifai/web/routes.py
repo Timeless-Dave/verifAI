@@ -11,8 +11,9 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from verifai.orchestrate import CheckBundle, run_check
 from verifai.sample import EXAMPLE_TEXT
-from verifai.schemas import CheckRequest, CheckResponse, ExpertResult, clean_paste, source_label
+from verifai.schemas import CheckRequest, CheckResponse, clean_paste, source_label
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +39,10 @@ def build_web_router() -> APIRouter:
                 "text": "",
                 "example_json": _example_json(),
                 "mailto_is_placeholder": request.app.state.settings.mailto_is_placeholder,
+                "combined": None,
+                "verdict": None,
+                "confidence": None,
+                "explanation": "",
             },
         )
 
@@ -51,10 +56,19 @@ def build_web_router() -> APIRouter:
             "text": cleaned,
             "example_json": _example_json(),
             "mailto_is_placeholder": request.app.state.settings.mailto_is_placeholder,
+            "combined": None,
+            "verdict": None,
+            "confidence": None,
+            "explanation": "",
         }
         if error is None:
             try:
-                context["results"] = _run(request, cleaned)
+                bundle = _run(request, cleaned)
+                context["results"] = bundle.results
+                context["combined"] = bundle.combined
+                context["verdict"] = bundle.verdict
+                context["confidence"] = bundle.confidence
+                context["explanation"] = bundle.explanation
             except Exception:
                 log.exception("citation check failed")
                 context["error"] = (
@@ -70,31 +84,52 @@ def build_web_router() -> APIRouter:
         if error:
             raise HTTPException(status_code=422, detail=error)
         try:
-            results = _run(request, cleaned)
+            bundle = _run(request, cleaned)
         except Exception as exc:
             log.exception("citation check failed")
             raise HTTPException(
                 status_code=500, detail="The check failed before it could finish."
             ) from exc
-        return CheckResponse(results=results)
+        return CheckResponse(
+            results=bundle.results,
+            combined=bundle.combined,
+            verdict=bundle.verdict,
+            confidence=bundle.confidence,
+            explanation=bundle.explanation,
+        )
 
     @router.get("/health")
     def health(request: Request) -> dict[str, Any]:
-        expert = request.app.state.router.experts[0]
+        judge = request.app.state.judge
         return {
             "status": "ok",
             "version": request.app.state.settings.app_version,
-            "providers": expert.registry.names(),
+            "providers": _provider_names(request),
+            "experts": [expert.name for expert in request.app.state.router.experts],
+            "model": {"name": judge.name, "loaded": judge.available()},
         }
 
     return router
 
 
-def _run(request: Request, text: str) -> list[ExpertResult]:
-    experts = request.app.state.router.select(text)
-    if not experts:
-        return []
-    return [expert.check(text) for expert in experts]
+def _run(request: Request, text: str) -> CheckBundle:
+    return run_check(
+        request.app.state.router,
+        text,
+        limit=request.app.state.settings.max_claims,
+    )
+
+
+def _provider_names(request: Request) -> list[str]:
+    names: list[str] = []
+    for expert in request.app.state.router.experts:
+        registry = getattr(expert, "registry", None)
+        if registry is None:
+            continue
+        for name in registry.names():
+            if name not in names:
+                names.append(name)
+    return names
 
 
 def _validate(text: str, limit: int) -> tuple[str | None, str]:
