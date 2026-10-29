@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>VerifAI server</title>
+  <style>
+    body { margin: 0; font: 16px/1.4 sans-serif; color: #1c1915; background: #f4efe4; }
+    main { max-width: 520px; margin: 32px auto; padding: 0 16px; }
+    label { display: block; margin-bottom: 8px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #1c1915; }
+    button { margin-top: 12px; padding: 8px 12px; background: #1c1915; color: #f4efe4; border: 0; }
+    p { min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>VerifAI server</h1>
+    <p>The extension only talks to this address. The default is the local app.</p>
+    <form id="server-form">
+      <label for="server">Server URL</label>
+      <input id="server" name="server" type="url" required value="http://127.0.0.1:8741">
+      <button type="submit">Save</button>
+    </form>
+    <p id="status" role="status"></p>
+  </main>
+  <script src="config.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
