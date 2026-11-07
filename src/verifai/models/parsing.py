@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,6 +17,7 @@ class Judgment:
     explanation: str
 
 
+_THINK = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL | re.IGNORECASE)
 _STANCES = {
     "supports": Stance.SUPPORTS,
     "support": Stance.SUPPORTS,
@@ -49,7 +51,8 @@ def judgment_prompt(claim: str, passage: str) -> str:
 
 
 def parse_judgment(raw: str) -> Judgment:
-    data = _extract_object(raw)
+    # A reasoning model may still emit a <think> block. The answer follows it.
+    data = _extract_object(_THINK.sub("", raw))
     if data is None:
         return Judgment(Stance.NEUTRAL, 0.0, "The local model did not return JSON.")
     stance = _STANCES.get(str(data.get("stance", "")).strip().lower(), Stance.NEUTRAL)

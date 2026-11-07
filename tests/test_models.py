@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 
 import httpx
@@ -457,6 +458,9 @@ def test_mlx_complete_uses_a_chat_template(monkeypatch: pytest.MonkeyPatch) -> N
     assert "neutral" in complete("hello")
     assert captured["model_id"] == "mlx-community/Qwen3.5-9B-4bit"
     assert captured["prompt"] == "rendered"
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["enable_thinking"] is False
 
 
 def test_transformers_pipeline_is_built_from_the_model_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -585,3 +589,29 @@ def test_nli_needs_torch_and_survives_odd_load_errors(monkeypatch: pytest.Monkey
     assert result.stance is Stance.NEUTRAL
     assert "could not load (NameError)" in result.explanation
     assert judge.available() is False
+
+
+def test_parse_judgment_skips_a_think_block() -> None:
+    raw = '<think>The evidence {maybe} says so.</think>\n{"stance":"refutes","confidence":0.9}'
+    assert parse_judgment(raw).stance is Stance.REFUTES
+    assert parse_judgment("<think>ran out of tokens {").stance is Stance.NEUTRAL
+
+
+def test_ollama_and_llamacpp_turn_thinking_off() -> None:
+    bodies: list[dict[str, object]] = []
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        if request.url.path.endswith("/api/chat"):
+            return httpx.Response(200, json={"message": {"content": '{"stance":"neutral"}'}})
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"stance":"neutral"}'}}]}
+        )
+
+    with respx.mock() as router:
+        router.post("http://o.test/api/chat").mock(side_effect=reply)
+        router.post("http://l.test/v1/chat/completions").mock(side_effect=reply)
+        OllamaJudge("http://o.test", "qwen3.5:9b").judge("c", "p")
+        LlamaCppJudge("http://l.test/v1", "qwen3.5-9b").judge("c", "p")
+    assert bodies[0]["think"] is False
+    assert bodies[1]["chat_template_kwargs"] == {"enable_thinking": False}

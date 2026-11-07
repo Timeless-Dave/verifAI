@@ -253,10 +253,13 @@ def mlx_complete(model_id: str) -> Complete:
         rendered = prompt
         apply = getattr(tokenizer, "apply_chat_template", None)
         if callable(apply):
+            # Qwen3 and later think before answering by default, and the
+            # reasoning uses up the token budget before any JSON appears.
             rendered = apply(
                 [{"role": "user", "content": prompt}],
                 add_generation_prompt=True,
                 tokenize=False,
+                enable_thinking=False,
             )
         return str(
             mlx_lm.generate(model, tokenizer, prompt=rendered, max_tokens=300, verbose=False)
@@ -297,6 +300,7 @@ def _ollama_complete(base_url: str, model: str, client: httpx.Client | None) -> 
                     "messages": [{"role": "user", "content": prompt}],
                     "stream": False,
                     "format": "json",
+                    "think": False,
                 },
             )
             response.raise_for_status()
@@ -323,6 +327,7 @@ def _llamacpp_complete(base_url: str, model: str, client: httpx.Client | None) -
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0,
+                    "chat_template_kwargs": {"enable_thinking": False},
                 },
             )
             response.raise_for_status()
