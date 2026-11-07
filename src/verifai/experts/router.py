@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from verifai.claims import extract_claims
+from verifai import claims
 from verifai.experts.base import Expert
 
 _CITATION_SIGNAL = re.compile(
@@ -40,7 +40,7 @@ def domains_for(text: str) -> set[str]:
         found.add("health")
     if _NEWS.search(text or ""):
         found.add("news")
-    if not found and extract_claims(text):
+    if not found and claims.extract_claims(text):
         found.add("general")
     return found
 

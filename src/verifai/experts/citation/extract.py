@@ -194,6 +194,11 @@ def clean_url(raw: str) -> str:
     return url
 
 
+def find_references(text: str) -> list[ExtractedCitation]:
+    """Structured reference entries in ``text``, without DOIs or bare URLs."""
+    return _find_references(text)
+
+
 def _find_references(text: str) -> list[ExtractedCitation]:
     found: list[ExtractedCitation] = []
     for match in _YEAR_PAREN_RE.finditer(text):

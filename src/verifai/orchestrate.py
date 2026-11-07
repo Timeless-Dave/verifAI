@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verifai.claims import extract_claims
+from verifai.claims import extract_claims, only_links, without_references
 from verifai.corroboration import SourceVote, Stance, corroborate
 from verifai.experts.base import Expert
 from verifai.experts.claim_check import NOT_MEDICAL_ADVICE
@@ -86,7 +86,9 @@ def _subjects(text: str, *, limit: int) -> list[str]:
     claims = extract_claims(text, limit=limit)
     if claims:
         return claims
-    cleaned = " ".join((text or "").split())
+    cleaned = " ".join(without_references(text).split())
+    if only_links(cleaned):
+        return []
     if cleaned and domains_for(cleaned):
         return [cleaned[:800]]
     return []

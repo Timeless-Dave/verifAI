@@ -47,7 +47,7 @@ Half-true and barely-true are mixed truth values. LIAR is research-use only. Pol
 
 The router still decides which expert runs. A SciFact sentence with no health vocabulary can go to the general expert. A LIAR statement with no news vocabulary can go too. The report lists the experts that actually ran. Sentences shorter than 30 characters are not extracted as claims. If there is also no health or news cue, the row is unverifiable because nothing was checked.
 
-When a citation paste is also extracted as a claim, `run_check` returns that claim's verdict as the top-level verdict. With no model loaded, the claim stays unverified even if the citation expert verified the reference. The JSON `experts` list shows both.
+Reference entries, bare DOIs, and lines that are only a link go to the citation expert alone. They are not split into sentences and sent to the claim experts. A paste that mixes prose with references still has its prose sentences checked as claims. When that happens, `run_check` returns the claims' verdict as the top-level verdict, and the JSON `experts` list shows the citation expert too.
 
 SciFact is not scored against its own abstract corpus or its gold cited documents. The health expert searches PubMed and Europe PMC. That number is not a SciFact leaderboard number.
 
