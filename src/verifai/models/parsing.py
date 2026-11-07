@@ -43,6 +43,10 @@ def judgment_prompt(claim: str, passage: str) -> str:
     return (
         "You are a careful claim checker. Decide whether the evidence supports, "
         "refutes, or does not address the claim. Use only the evidence. "
+        "Say refutes only when the evidence states something that cannot be true "
+        "at the same time as the claim. If the evidence does not mention the "
+        "claim's specific detail, the stance is neutral: missing information is "
+        "not a contradiction. "
         'Reply with one JSON object and no other text: {"stance":"supports"|"refutes"|'
         '"neutral","confidence":0.0,"explanation":"one sentence"}\n'
         f"Claim: {claim.strip()[:600]}\n"
