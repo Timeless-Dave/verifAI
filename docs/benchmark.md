@@ -16,6 +16,7 @@ The pipeline's `unsupported` verdict is refuted. `unverifiable` is unverified. `
 - **Abstention rate** is how often the prediction is unverified.
 - **Accuracy on non-abstained claims** ignores unverified predictions. It is n/a when the system never said supported or refuted.
 - **Two-source block rate** is how often the verdict is unverifiable even though the retrieved evidence contains a supporting or refuting stance. `corroborate` withheld the side. A citation verdict is not a block: the citation checker does not use that rule, and one index can still verify a citation.
+- **Blocked rows whose evidence leaned the gold way** looks only at two-source blocks. It takes the side most judged passages took (ties have no side) and compares it with the gold label. It is a diagnostic. It never changes a prediction, and it shows what relaxing the two-source rule would gain or cost.
 - **Mean latency** is the mean wall time of `run_check`, including retrieval.
 
 The confusion matrix rows are gold and the columns are predicted, in the order supported, refuted, unverified.

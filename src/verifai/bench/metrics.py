@@ -29,6 +29,7 @@ class ScoredExample:
     predicted: BenchLabel
     blocked: bool
     latency_s: float
+    lean: BenchLabel | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,9 @@ class Metrics:
     non_abstained_accuracy: float | None
     two_source_blocks: int
     two_source_block_rate: float | None
+    blocked_leaning: int
+    blocked_lean_correct: int
+    blocked_lean_accuracy: float | None
     total_latency_seconds: float
     mean_latency_seconds: float | None
     per_class: tuple[ClassScore, ...]
@@ -66,11 +70,16 @@ def score_examples(rows: Sequence[ScoredExample]) -> Metrics:
     matrix = [[0 for _ in LABELS] for _ in LABELS]
     index = {label: position for position, label in enumerate(LABELS)}
     blocked = 0
+    leaning = 0
+    lean_correct = 0
     latency = 0.0
     for row in rows:
         matrix[index[row.gold]][index[row.predicted]] += 1
         if row.blocked:
             blocked += 1
+            if row.lean is not None:
+                leaning += 1
+                lean_correct += row.lean == row.gold
         latency += row.latency_s
 
     per_class: list[ClassScore] = []
@@ -112,6 +121,9 @@ def score_examples(rows: Sequence[ScoredExample]) -> Metrics:
         non_abstained_accuracy=_rate(non_abstained_correct, non_abstained_n),
         two_source_blocks=blocked,
         two_source_block_rate=_rate(blocked, n),
+        blocked_leaning=leaning,
+        blocked_lean_correct=lean_correct,
+        blocked_lean_accuracy=_rate(lean_correct, leaning),
         total_latency_seconds=latency,
         mean_latency_seconds=(latency / n) if n else None,
         per_class=tuple(per_class),

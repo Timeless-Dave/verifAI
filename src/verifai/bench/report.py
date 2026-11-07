@@ -190,6 +190,9 @@ def metrics_payload(metrics: Metrics) -> dict[str, Any]:
         "non_abstained_accuracy": metrics.non_abstained_accuracy,
         "two_source_blocks": metrics.two_source_blocks,
         "two_source_block_rate": metrics.two_source_block_rate,
+        "blocked_leaning": metrics.blocked_leaning,
+        "blocked_lean_correct": metrics.blocked_lean_correct,
+        "blocked_lean_accuracy": metrics.blocked_lean_accuracy,
         "total_latency_seconds": metrics.total_latency_seconds,
         "mean_latency_seconds": metrics.mean_latency_seconds,
         "macro_f1": metrics.macro_f1,
@@ -231,6 +234,7 @@ def _outcome_payload(outcome: Outcome) -> dict[str, Any]:
         "raw_label": outcome.raw_label,
         "experts": list(outcome.experts),
         "blocked_by_two_source_rule": outcome.blocked,
+        "blocked_evidence_lean": outcome.lean.value if outcome.lean else None,
         "latency_seconds": outcome.latency_s,
         "error": outcome.error,
         "detail": outcome.detail,
@@ -250,6 +254,10 @@ def _metrics_lines(metrics: Metrics) -> list[str]:
         (
             "- Two-source blocks: "
             f"{_ratio(metrics.two_source_block_rate, metrics.two_source_blocks, metrics.n)}"
+        ),
+        (
+            "- Blocked rows whose evidence leaned the gold way: "
+            f"{_ratio(metrics.blocked_lean_accuracy, metrics.blocked_lean_correct, metrics.blocked_leaning)}"
         ),
         f"- Mean latency: {_seconds(metrics.mean_latency_seconds)}",
         "",

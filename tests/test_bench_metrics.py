@@ -67,3 +67,19 @@ def test_sample_is_stable_for_a_seed() -> None:
     assert take_sample(rows, 5, 7) != take_sample(rows, 5, 8)
     assert take_sample(rows, 0, 7) == rows
     assert take_sample(rows, None, 7) == rows
+
+
+def test_blocked_lean_counts_only_blocked_rows_with_a_side() -> None:
+    s, r, u = BenchLabel.SUPPORTED, BenchLabel.REFUTED, BenchLabel.UNVERIFIED
+    rows = [
+        ScoredExample(gold=s, predicted=u, blocked=True, latency_s=0.0, lean=s),
+        ScoredExample(gold=r, predicted=u, blocked=True, latency_s=0.0, lean=s),
+        ScoredExample(gold=r, predicted=u, blocked=True, latency_s=0.0, lean=None),
+        ScoredExample(gold=s, predicted=s, blocked=False, latency_s=0.0, lean=r),
+    ]
+    metrics = score_examples(rows)
+    assert metrics.two_source_blocks == 3
+    assert metrics.blocked_leaning == 2
+    assert metrics.blocked_lean_correct == 1
+    assert metrics.blocked_lean_accuracy == 0.5
+    assert score_examples([]).blocked_lean_accuracy is None

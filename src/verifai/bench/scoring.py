@@ -43,6 +43,7 @@ class Outcome:
     experts: tuple[str, ...]
     error: str | None
     detail: str
+    lean: BenchLabel | None = None
 
 
 @dataclass(frozen=True)
@@ -111,12 +112,29 @@ def two_source_blocked(bundle: CheckBundle) -> bool:
     return False
 
 
+def evidence_lean(bundle: CheckBundle) -> BenchLabel | None:
+    """The side most claim-evidence stances took, or None on a tie or no stance.
+
+    Diagnostic only. It shows what a blocked verdict would have been, and it
+    never changes a prediction.
+    """
+    counts = {"supports": 0, "refutes": 0}
+    for claim in bundle.combined:
+        for item in claim.evidence:
+            if item.stance in counts:
+                counts[item.stance] += 1
+    if counts["supports"] == counts["refutes"]:
+        return None
+    return BenchLabel.SUPPORTED if counts["supports"] > counts["refutes"] else BenchLabel.REFUTED
+
+
 def _run_one(router: Router, example: Example) -> Outcome:
     started = time.perf_counter()
     try:
         bundle = run_check(router, example.text, limit=1)
         predicted = VERDICT_TO_BENCH[bundle.verdict]
         blocked = two_source_blocked(bundle)
+        lean = evidence_lean(bundle) if blocked else None
         experts = tuple(dict.fromkeys(result.expert for result in bundle.results))
         detail = bundle.explanation
         error = None
@@ -124,6 +142,7 @@ def _run_one(router: Router, example: Example) -> Outcome:
     except (RuntimeError, OSError, ValueError, httpx.HTTPError) as exc:
         predicted = BenchLabel.UNVERIFIED
         blocked = False
+        lean = None
         experts = ()
         detail = ""
         error = f"{type(exc).__name__}: {exc}"
@@ -142,6 +161,7 @@ def _run_one(router: Router, example: Example) -> Outcome:
         experts=experts,
         error=error,
         detail=detail[:500],
+        lean=lean,
     )
 
 
@@ -152,6 +172,7 @@ def _scored(outcomes: Sequence[Outcome]) -> list[ScoredExample]:
             predicted=outcome.predicted,
             blocked=outcome.blocked,
             latency_s=outcome.latency_s,
+            lean=outcome.lean,
         )
         for outcome in outcomes
     ]
