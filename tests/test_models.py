@@ -29,6 +29,12 @@ from verifai.models.parsing import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_host_mlx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Backend choice must not depend on whether this machine has Apple silicon."""
+    monkeypatch.setattr("verifai.models.judge.mlx_supported", lambda: False)
+
+
 def _settings(**overrides: object) -> Settings:
     values: dict[str, object] = {"model_backend": "none", "nli_enabled": False}
     values.update(overrides)
@@ -286,7 +292,7 @@ def test_probe_and_auto_selection() -> None:
 
 def test_auto_order(monkeypatch: pytest.MonkeyPatch) -> None:
     def find_spec(name: str) -> object | None:
-        if name == "transformers":
+        if name in {"transformers", "torch"}:
             return object()
         return None
 
@@ -561,3 +567,21 @@ def test_pick_auto_honours_skip(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = _settings(model_backend="auto", nli_enabled=True)
     assert isinstance(pick_auto(settings), NliJudge)
     assert isinstance(pick_auto(settings, skip={"nli"}), NullJudge)
+
+
+def test_nli_needs_torch_and_survives_odd_load_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    present = {"transformers"}
+    monkeypatch.setattr(
+        "verifai.models.judge.importlib.util.find_spec",
+        lambda name: object() if name in present else None,
+    )
+    assert NliJudge("m").available() is False
+
+    def no_torch(model_id: str) -> Callable[..., object]:
+        raise NameError(f"name 'torch' is not defined ({model_id})")
+
+    judge = NliJudge("m", factory=no_torch)
+    result = judge.judge("claim", "passage")
+    assert result.stance is Stance.NEUTRAL
+    assert "could not load (NameError)" in result.explanation
+    assert judge.available() is False

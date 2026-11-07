@@ -8,8 +8,18 @@ PORT ?= 8741
 # make bench BENCH_ARGS="--backend none --limit 50 --seed 0"
 BENCH_ARGS ?=
 
+# Optional model backends from pyproject.toml. uv sync removes packages the
+# lockfile does not list, so a plain `uv pip install mlx-lm` would not survive
+# the next make. Apple silicon gets mlx by default. EXTRAS="mlx nli" adds both;
+# EXTRAS= installs neither.
+ifeq ($(shell uname -s)-$(shell uname -m),Darwin-arm64)
+EXTRAS ?= mlx
+else
+EXTRAS ?=
+endif
+
 install:
-	$(UV) sync --all-groups
+	$(UV) sync --all-groups $(foreach extra,$(EXTRAS),--extra $(extra))
 
 extension-lint:
 	node --check extension/src/*.js

@@ -95,13 +95,22 @@ class NliJudge:
             return True
         if self._enabled is not None:
             return self._enabled
-        return importlib.util.find_spec("transformers") is not None
+        # mlx-lm pulls in transformers without PyTorch, and the pipeline
+        # cannot run without it.
+        return all(importlib.util.find_spec(name) is not None for name in ("transformers", "torch"))
 
     def judge(self, claim: str, passage: str) -> Judgment:
         if not self.available():
             return Judgment(Stance.NEUTRAL, 0.0, "The NLI model is not installed.")
         try:
-            rows = self._pipeline()({"text": passage[:1500], "text_pair": claim[:400]})
+            pipe = self._pipeline()
+        except Exception as exc:  # noqa: BLE001 - transformers raises many types while loading
+            self._failed = True
+            return Judgment(
+                Stance.NEUTRAL, 0.0, f"The NLI model could not load ({type(exc).__name__})."
+            )
+        try:
+            rows = pipe({"text": passage[:1500], "text_pair": claim[:400]})
         except (OSError, RuntimeError, ValueError, TypeError) as exc:
             self._failed = True
             return Judgment(Stance.NEUTRAL, 0.0, f"The NLI model failed ({type(exc).__name__}).")

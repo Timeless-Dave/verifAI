@@ -25,6 +25,11 @@ dependencies = [
   "uvicorn[standard]>=0.54.0",
 ]
 
+[project.optional-dependencies]
+# Apple silicon only. make install adds it there by default.
+mlx = ["mlx-lm>=0.32.2 ; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+nli = ["torch>=2.5", "transformers>=4.46"]
+
 [project.scripts]
 verifai = "verifai.main:run"
 

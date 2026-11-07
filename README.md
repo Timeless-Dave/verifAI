@@ -49,7 +49,7 @@ make install
 make run
 ```
 
-`make install` runs `uv sync --all-groups` and creates the local environment.
+`make install` runs `uv sync --all-groups` and creates the local environment. On Apple silicon it also installs the `mlx` extra (`mlx-lm`). Set `EXTRAS` to choose: `make run EXTRAS="mlx nli"` adds NLI, and `make run EXTRAS=` installs no model backend.
 `make run` installs if that has not been done and starts the app on `127.0.0.1:8741`.
 
 Then open [http://127.0.0.1:8741](http://127.0.0.1:8741). After uv itself is installed, those two commands are the setup.
@@ -82,9 +82,12 @@ Set `VERIFAI_MODEL_BACKEND=none` to skip judging. Fact-check ratings are still r
 MLX, on Apple silicon:
 
 ```bash
-uv pip install mlx-lm
+make install          # Apple silicon installs the mlx extra by default
+# or: uv sync --all-groups --extra mlx
 # The first judgment downloads the model into the Hugging Face cache.
 ```
+
+Use the extra rather than `uv pip install mlx-lm`. `uv sync`, which every `make` target runs, removes packages the lockfile does not list.
 
 If 9B is tight next to other apps:
 
@@ -95,8 +98,10 @@ If 9B is tight next to other apps:
 NLI (entailment, lighter than a 9B model, and preferred by `auto` when it is installed):
 
 ```bash
-uv pip install torch transformers
+make install EXTRAS="mlx nli"   # or: uv sync --all-groups --extra nli
 ```
+
+NLI counts as installed only when both `transformers` and `torch` import. `mlx-lm` brings `transformers` on its own, and that is not enough.
 
 The default id is `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`. For a MiniCheck-style model set `VERIFAI_NLI_MODEL` to that model’s id (for example `lytang/MiniCheck-DeBERTa-v3-Large`). The larger checkpoint needs more memory than the default DeBERTa base (about 370 MB).
 
@@ -111,7 +116,7 @@ Then set `VERIFAI_MODEL_BACKEND=ollama`.
 
 llama.cpp: start `llama-server` with a GGUF (a Q4 quant of a 9B model fits the same 24 GB machine) and set `VERIFAI_MODEL_BACKEND=llamacpp`. The base URL is `VERIFAI_LLAMACPP_BASE_URL` (default `http://127.0.0.1:8080/v1`).
 
-These packages are optional. CI and `make test` do not install or download them. Tests use fakes.
+These packages are optional. CI does not install them, and no test downloads weights. Tests use fakes.
 
 ### Try the example
 
