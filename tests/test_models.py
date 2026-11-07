@@ -20,7 +20,13 @@ from verifai.models.judge import (
     pick_auto,
     probe,
 )
-from verifai.models.parsing import judgment_prompt, map_nli_label, map_nli_rows, parse_judgment
+from verifai.models.parsing import (
+    Judgment,
+    judgment_prompt,
+    map_nli_label,
+    map_nli_rows,
+    parse_judgment,
+)
 
 
 def _settings(**overrides: object) -> Settings:
@@ -208,7 +214,9 @@ def test_nli_disabled_and_missing_package() -> None:
     assert missing.available() is False
 
 
-def test_mlx_is_unavailable_without_apple_silicon() -> None:
+def test_mlx_is_unavailable_without_apple_silicon(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("verifai.models.judge.platform.system", lambda: "Linux")
+    monkeypatch.setattr("verifai.models.judge.importlib.util.find_spec", lambda _: None)
     assert mlx_supported() is False
     assert mlx_installed() is False
     judge = MlxJudge("mlx-community/Qwen3.5-9B-4bit")
@@ -231,7 +239,11 @@ def test_mlx_is_unavailable_without_apple_silicon() -> None:
     assert "did not answer" in broken.judge("c", "p").explanation
 
 
-def test_mlx_load_failure_disables_the_backend() -> None:
+def test_mlx_load_failure_disables_the_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    def cannot_load(model_id: str) -> Callable[[str], str]:
+        raise OSError(f"{model_id} not found")
+
+    monkeypatch.setattr("verifai.models.judge.mlx_complete", cannot_load)
     judge = MlxJudge("missing", enabled=True)
     result = judge.judge("claim", "passage")
     assert result.stance is Stance.NEUTRAL
@@ -506,3 +518,46 @@ def test_ollama_opens_its_own_client(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("verifai.models.judge.httpx.Client", FakeClient)
     judge = OllamaJudge("http://ollama.test", "qwen3.5:9b")
     assert judge.judge("claim", "passage").stance is Stance.SUPPORTS
+
+
+def test_default_nli_model_is_a_public_checkpoint() -> None:
+    # The old default, DeBERTa-v3-small-mnli-fever-anli, does not exist on the Hub.
+    assert Settings().nli_model == "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
+
+
+def test_auto_falls_back_when_nli_cannot_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(model_id: str) -> Callable[..., object]:
+        raise OSError(f"{model_id} is not downloadable")
+
+    class Ollama:
+        name = "ollama"
+
+        def available(self) -> bool:
+            return True
+
+        def judge(self, claim: str, passage: str) -> Judgment:
+            del claim, passage
+            return Judgment(Stance.SUPPORTS, 0.9, "fallback")
+
+    picks: list[frozenset[str]] = []
+
+    def fake_pick(settings: Settings, *, skip: set[str] | frozenset[str] = frozenset()) -> object:
+        del settings
+        picks.append(frozenset(skip))
+        return Ollama() if "nli" in skip else NliJudge("blocked", factory=broken)
+
+    monkeypatch.setattr("verifai.models.judge.pick_auto", fake_pick)
+    auto = AutoJudge(_settings(model_backend="auto", nli_enabled=True))
+    first = auto.judge("claim", "passage")
+    assert first.explanation == "fallback"
+    assert auto.judge("claim", "passage").stance is Stance.SUPPORTS
+    assert picks == [frozenset(), frozenset({"nli"})]
+
+
+def test_pick_auto_honours_skip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("verifai.models.judge.importlib.util.find_spec", lambda _: object())
+    monkeypatch.setattr("verifai.models.judge.probe", lambda _: False)
+    monkeypatch.setattr("verifai.models.judge.mlx_supported", lambda: False)
+    settings = _settings(model_backend="auto", nli_enabled=True)
+    assert isinstance(pick_auto(settings), NliJudge)
+    assert isinstance(pick_auto(settings, skip={"nli"}), NullJudge)

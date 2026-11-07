@@ -26,7 +26,7 @@ For citations, that means:
 
 A Mac (including a 24 GB M5 Pro) or any machine with a recent Python. The citation checker is HTTP plus deterministic string matching and does not need a model. Claim judgments use a local model when one is installed, and they still return an unverified result when it is not. `uv` installs a CPython if the system one is older than 3.11. RapidFuzz ships wheels, so you do not need a compiler.
 
-On a 24 GB Apple silicon Mac the intended default is MLX with a 4-bit Qwen3.5 9B (`mlx-community/Qwen3.5-9B-4bit`, about 6 GB of weights). That leaves room for the app, a small DeBERTa NLI model, and ordinary desktop use. A 7B 4-bit model is the fallback if you want more headroom. Nothing is downloaded until you install a backend and run a check.
+On a 24 GB Apple silicon Mac the intended default is MLX with a 4-bit Qwen3.5 9B (`mlx-community/Qwen3.5-9B-4bit`, about 6 GB of weights). That leaves room for the app, a DeBERTa NLI model (about 370 MB), and ordinary desktop use. A 7B 4-bit model is the fallback if you want more headroom. Nothing is downloaded until you install a backend and run a check.
 
 ## Run it
 
@@ -70,10 +70,12 @@ The server reads `VERIFAI_HOST` and `VERIFAI_PORT` (defaults `127.0.0.1` and `87
 
 `VERIFAI_MODEL_BACKEND` defaults to `auto`. It uses the first backend that is actually installed:
 
-1. A small NLI model (DeBERTa MNLI, or a MiniCheck-style classifier if you set that model id) when `transformers` imports.
+1. An NLI model (DeBERTa MNLI, or a MiniCheck-style classifier if you set that model id) when `transformers` imports.
 2. MLX on Apple silicon when `mlx_lm` imports. The default weights are `mlx-community/Qwen3.5-9B-4bit`.
 3. Ollama at `http://127.0.0.1:11434`.
 4. A llama.cpp server at `http://127.0.0.1:8080/v1` (OpenAI-compatible chat completions).
+
+If the chosen backend fails to load, for example because its weights cannot be downloaded, `auto` moves on to the next one in this list.
 
 Set `VERIFAI_MODEL_BACKEND=none` to skip judging. Fact-check ratings are still read. Pages and abstracts are listed and linked, and the verdict stays unverified.
 
@@ -96,7 +98,7 @@ NLI (entailment, lighter than a 9B model, and preferred by `auto` when it is ins
 uv pip install torch transformers
 ```
 
-The default id is `MoritzLaurer/DeBERTa-v3-small-mnli-fever-anli`. For a MiniCheck-style model set `VERIFAI_NLI_MODEL` to that model’s id (for example `lytang/MiniCheck-DeBERTa-v3-Large`). The larger checkpoint needs more memory than the small DeBERTa.
+The default id is `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`. For a MiniCheck-style model set `VERIFAI_NLI_MODEL` to that model’s id (for example `lytang/MiniCheck-DeBERTa-v3-Large`). The larger checkpoint needs more memory than the default DeBERTa base (about 370 MB).
 
 Ollama:
 
@@ -224,7 +226,7 @@ Matching uses RapidFuzz on normalized titles (case, accents, and punctuation fol
 | `VERIFAI_MLX_MODEL` | `mlx-community/Qwen3.5-9B-4bit` | MLX weights. Used on Apple silicon when that backend is selected. |
 | `VERIFAI_OLLAMA_BASE_URL`, `VERIFAI_OLLAMA_MODEL` | `http://127.0.0.1:11434`, `qwen3.5:9b` | Ollama. |
 | `VERIFAI_LLAMACPP_BASE_URL`, `VERIFAI_LLAMACPP_MODEL` | `http://127.0.0.1:8080/v1`, `qwen3.5-9b` | llama.cpp server. |
-| `VERIFAI_NLI_MODEL` | `MoritzLaurer/DeBERTa-v3-small-mnli-fever-anli` | Entailment model. MiniCheck-style ids are accepted. |
+| `VERIFAI_NLI_MODEL` | `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` | Entailment model. MiniCheck-style ids are accepted. |
 | `VERIFAI_NLI_ENABLED` | `true` | When false, `auto` skips NLI even if `transformers` is installed. |
 | `VERIFAI_MAX_CLAIMS` | `5` | How many extracted claims are checked per paste. |
 

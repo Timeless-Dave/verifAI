@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3.5:9b"
     llamacpp_base_url: str = "http://127.0.0.1:8080/v1"
     llamacpp_model: str = "qwen3.5-9b"
-    nli_model: str = "MoritzLaurer/DeBERTa-v3-small-mnli-fever-anli"
+    nli_model: str = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
     nli_enabled: bool = True
     max_claims: int = Field(default=5, ge=1, le=20)
 

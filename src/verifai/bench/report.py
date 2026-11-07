@@ -25,7 +25,7 @@ _CAVEATS = (
     "Claim rows go through run_check: the router, the existing experts, and corroborate.",
     "A supported or refuted claim needs two independent sources. Wikipedia is one source no matter how many articles were opened. The same paper in PubMed and Europe PMC is one source. Google Fact Check is one source.",
     "The none backend does not judge passages. Its claim accuracy is the share of gold unverified rows, and its abstention rate is 1, unless a retrieved page already carries a published rating.",
-    "The default NLI model is the one in Settings, MoritzLaurer/DeBERTa-v3-small-mnli-fever-anli. It was trained on FEVER, so a FEVER score from that model is not an out-of-domain result.",
+    "The default NLI model is the one in Settings, MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli. It was trained on FEVER, so a FEVER score from that model is not an out-of-domain result.",
     "SciFact retrieval here is PubMed and Europe PMC, not the SciFact abstract corpus and not the gold cited documents.",
     "LIAR's half-true and barely-true labels are mapped to unverified. They are not FEVER's NOT ENOUGH INFO.",
     "Live pages change. The same seed can score differently later.",

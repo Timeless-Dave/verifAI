@@ -72,7 +72,7 @@ A full FEVER development file is about 20,000 claims. With live retrieval that i
 
 ### NLI
 
-The default model id is `MoritzLaurer/DeBERTa-v3-small-mnli-fever-anli`, from `Settings`. It was trained on FEVER, ANLI, and other NLI sets. A FEVER score from this model is not an out-of-domain result. Say the model id next to the number. SciFact and LIAR are the more informative rows for this checkpoint.
+The default model id is `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`, from `Settings`. It was trained on FEVER, ANLI, and other NLI sets. A FEVER score from this model is not an out-of-domain result. Say the model id next to the number. SciFact and LIAR are the more informative rows for this checkpoint.
 
 The default environment does not install PyTorch, so CI stays small.
 
@@ -81,7 +81,7 @@ uv pip install torch transformers
 make bench BENCH_ARGS="--backend nli --limit 50 --seed 0"
 ```
 
-The small DeBERTa checkpoint is a few hundred megabytes and fits easily next to macOS.
+The DeBERTa base checkpoint is about 370 MB and fits easily next to macOS. An earlier default, `MoritzLaurer/DeBERTa-v3-small-mnli-fever-anli`, is not a public model on Hugging Face and could not be downloaded.
 
 ### MLX, Ollama, llama.cpp
 

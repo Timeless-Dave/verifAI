@@ -169,6 +169,7 @@ class AutoJudge:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._chosen: Judge | None = None
+        self._skip: set[str] = set()
 
     def available(self) -> bool:
         return self._pick().available()
@@ -177,11 +178,22 @@ class AutoJudge:
         chosen = self._pick()
         if not chosen.available():
             return NullJudge().judge(claim, passage)
-        return chosen.judge(claim, passage)
+        judgment = chosen.judge(claim, passage)
+        if chosen.available() or chosen.name == "none":
+            return judgment
+        # The backend failed to load, for example weights that cannot be
+        # downloaded. Fall through to the next backend instead of staying
+        # unjudged for the rest of the process.
+        self._skip.add(chosen.name)
+        self._chosen = None
+        fallback = self._pick()
+        if fallback.available():
+            return fallback.judge(claim, passage)
+        return judgment
 
     def _pick(self) -> Judge:
         if self._chosen is None:
-            self._chosen = pick_auto(self._settings)
+            self._chosen = pick_auto(self._settings, skip=self._skip)
         return self._chosen
 
 
@@ -200,17 +212,18 @@ def build_judge(settings: Settings) -> Judge:
     return AutoJudge(settings)
 
 
-def pick_auto(settings: Settings) -> Judge:
-    if settings.nli_enabled:
+def pick_auto(settings: Settings, *, skip: set[str] | frozenset[str] = frozenset()) -> Judge:
+    if settings.nli_enabled and "nli" not in skip:
         nli = NliJudge(settings.nli_model)
         if nli.available():
             return nli
-    mlx = MlxJudge(settings.mlx_model)
-    if mlx.available():
-        return mlx
-    if probe(f"{settings.ollama_base_url.rstrip('/')}/api/tags"):
+    if "mlx" not in skip:
+        mlx = MlxJudge(settings.mlx_model)
+        if mlx.available():
+            return mlx
+    if "ollama" not in skip and probe(f"{settings.ollama_base_url.rstrip('/')}/api/tags"):
         return OllamaJudge(settings.ollama_base_url, settings.ollama_model)
-    if probe(f"{settings.llamacpp_base_url.rstrip('/')}/models"):
+    if "llamacpp" not in skip and probe(f"{settings.llamacpp_base_url.rstrip('/')}/models"):
         return LlamaCppJudge(settings.llamacpp_base_url, settings.llamacpp_model)
     return NullJudge()
 
