@@ -126,3 +126,31 @@ Start the server yourself. Ollama listens on `127.0.0.1:11434`. llama.cpp's Open
 Each run writes JSON and Markdown under `results/`. That directory is gitignored except for this folder's `README.md`. The files record the date, git SHA, VerifAI version, backend, model id, judge name, seed, limit, dataset version, sha256, and every scored example.
 
 An example that raises is scored unverified and the error string is kept.
+
+## Results for v0.2.0
+
+Run on a 24 GB Apple silicon Mac: `make bench BENCH_ARGS="--backend mlx --limit 50 --seed 0"`, model `mlx-community/Qwen3.5-9B-4bit`, git `370ce90`, 2026-11-07. Live retrieval, no Google Fact Check key. 50 rows each from FEVER, SciFact, and LIAR, plus the 16 hand-written citations. The JSON and Markdown reports are attached to the GitHub release.
+
+| Domain | n | Accuracy | Abstention | Correct when it answered | Two-source blocks |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| general (FEVER) | 50 | 0.38 | 1.00 | n/a (0 answered) | 0.64 |
+| health (SciFact) | 50 | 0.40 | 0.82 | 4/9 | 0.16 |
+| news (LIAR) | 50 | 0.52 | 1.00 | n/a (0 answered) | 0.32 |
+| citations | 16 | 1.00 | 0.13 | 14/14 | 0 |
+| overall | 166 | 0.49 | 0.86 | 18/23 | 0.34 |
+
+Mean latency was 5.3 s per check. Overall macro-F1 was 0.40.
+
+What these numbers say:
+
+- The citation checker is the part that works. It found every invented reference and every real one.
+- Claim checking abstains on most claims. On general and news claims it never gave a verdict in this sample. The accuracy in those rows is the share of gold rows that are unverified.
+- Health verdicts that passed the two-source rule were right 4 of 9 times. Two papers that a 9B model reads as agreeing are not yet enough.
+
+### Why the two-source rule stays
+
+A blocked claim is one where the judged evidence took a side but no second independent source agreed. In this run, the side the evidence leaned matched the gold label in 20 of 53 blocked claims (0.38): 18/31 on FEVER, 1/8 on SciFact, and 1/14 on LIAR. Releasing those verdicts would give answers that are wrong more often than right, and on FEVER, where it does best, wrong 42% of the time. VerifAI keeps the rule and says unverified instead.
+
+Two fixes made before this run matter for reading older numbers. Qwen3.5 thinks before it answers by default. Its reasoning filled the token budget, so no passage was judged at all, and every FEVER and SciFact claim abstained. Thinking is now off for MLX, Ollama, and llama.cpp. The judge also read a passage that left a detail out as refuting the claim. The prompt now says missing information is not a contradiction. Blocks fell from 0.48 to 0.34, and refute leans from 58 to 42.
+
+The way to more verdicts is more independent sources for general and news claims, not a looser rule. A Google Fact Check key adds PolitiFact and other reviews, which is the obvious next step for LIAR-style statements.
