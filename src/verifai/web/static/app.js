@@ -3,6 +3,33 @@
   var area = document.querySelector("#claim");
   var example = document.querySelector("#example-text");
   var results = document.querySelector("#results");
+  var toggle = document.querySelector("[data-theme-toggle]");
+
+  function showTheme() {
+    if (!toggle) {
+      return;
+    }
+    var dark = document.documentElement.dataset.theme === "dark";
+    toggle.textContent = dark ? "Light" : "Dark";
+    toggle.setAttribute("aria-pressed", dark ? "true" : "false");
+  }
+  if (toggle) {
+    showTheme();
+    toggle.addEventListener("click", function () {
+      var dark = document.documentElement.dataset.theme !== "dark";
+      if (dark) {
+        document.documentElement.dataset.theme = "dark";
+      } else {
+        delete document.documentElement.dataset.theme;
+      }
+      try {
+        localStorage.setItem("verifai-theme", dark ? "dark" : "light");
+      } catch (error) {
+        // Private windows can refuse storage. The choice still applies now.
+      }
+      showTheme();
+    });
+  }
 
   if (button && area && example) {
     button.addEventListener("click", function () {

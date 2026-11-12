@@ -3,7 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
+  <script>
+    // Light by default. A reader who chose dark gets it before the page paints.
+    try { if (localStorage.getItem("verifai-theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (e) {}
+  </script>
   <title>{% block title %}VerifAI{% endblock %}</title>
   <meta name="description" content="Check claims and citations against retrieved sources. Fake, retracted, and mis-cited papers are flagged, and every source is linked.">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -35,6 +39,7 @@
           <a href="/docs">API</a>
           <a href="/privacy">Privacy</a>
           <a href="https://github.com/Timeless-Dave/verifAI" rel="noopener noreferrer">GitHub</a>
+          <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">Dark</button>
         </nav>
       </div>
       <div class="nameplate">
