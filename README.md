@@ -61,11 +61,12 @@ A claim that cites a reference (`… as shown by Mehra et al. [15]`) is flagged 
 | Status | Meaning |
 | --- | --- |
 | **Verified** | A real record matches the title, authors, year, and venue as written, or the link loads (or the Internet Archive has a copy). |
-| **Partial match** | The work exists, but something printed beside it is wrong: the authors, the year, the venue, or a DOI that belongs to a different title. The card lists each mismatch. |
+| **Partial match** | The work exists, but something printed beside it is wrong: the authors, the year, or the venue. A shortened title still counts as the same work. The card lists each mismatch. |
+| **Wrong paper** | The DOI is real, but it is registered to a different paper than the one named beside it. This is a miscitation. |
 | **Retracted** | The work exists, and its publisher or PubMed records a retraction. |
 | **Not found** | No source that answered has anything close. This is common for invented citations. |
 | **Invalid** | The identifier cannot exist: a look-alike character hidden in a DOI (a Cyrillic "а" in place of the Latin "a"), an impossible arXiv month, a failed ISBN checksum, or a malformed PMID. |
-| **Couldn't check** | A source timed out, failed, or refused the request. This is not evidence that the citation is fake. |
+| **Couldn't check** | A source timed out, failed, or refused the request. This is not evidence that the citation is fake. It is also used for an ISBN whose only catalogue record names no author, because anyone can add such a record. |
 
 ### Confidence
 
@@ -133,7 +134,7 @@ What this shows:
   - a real paper, verified;
   - a paper retracted for fraud, retracted;
   - an invented paper, not found;
-  - a real arXiv ID printed with the wrong title, partial match;
+  - a real arXiv ID printed with the wrong title, partial match (since then, a DOI registered to a different paper is labelled Wrong paper);
   - a Wikipedia link and an ISBN, verified.
 
   The hand-written citation benchmark scores 16 out of 16.
