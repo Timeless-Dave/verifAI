@@ -18,7 +18,7 @@ function checkText(text) {
     }).then(function (response) {
       if (!response.ok) {
         return response.text().then(function (body) {
-          throw new Error(body || "VerifAI returned " + response.status);
+          throw new Error(config.errorMessage(response.status, body));
         });
       }
       return response.json();

@@ -121,4 +121,8 @@ On serverless, the in-process limits above do not hold: each instance counts on 
 
 ## The browser extension
 
-The extension's default server is `http://127.0.0.1:8741`. Its options page accepts another address, but `host_permissions` in `extension/manifest.json` allows only localhost, so a public address set there cannot be reached. Before you publish the extension for a public server, add that server's origin to `host_permissions` and make it the default in `extension/src/config.js`.
+The extension's default server is `http://127.0.0.1:8741`, the app on the same computer. To use a public server, open the extension's options, paste the server's https address, and save. The browser asks once for permission to reach that address. Nothing else on the web is granted: `optional_host_permissions` lets the extension ask, and it asks only for the server you saved.
+
+When a public server refuses a check, the panel shows the server's reason, for example its rate limit.
+
+Before you publish the extension for one public server, make that address the default in `extension/src/config.js` and add it to `host_permissions`, so a new user does not have to paste it. A quick-tunnel address changes every time the tunnel restarts, so wait for a named tunnel or a domain.
