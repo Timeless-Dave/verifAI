@@ -38,22 +38,48 @@ def test_a_translation_reply_is_read_carefully() -> None:
     assert "never" in prompt or "must not" in prompt
 
 
-def test_translation_uses_its_own_model_when_set() -> None:
+def _models(
+    judge_says: str, translator_says: str, verdict: str = "yes"
+) -> tuple[GenerativeJudge, list[str]]:
     asked: list[str] = []
 
     def judge_model(prompt: str) -> str:
         asked.append("judge")
-        return '{"stance":"neutral","confidence":0.5,"explanation":"x"}'
+        return judge_says
 
     def translator(prompt: str) -> str:
+        if "Two translations" in prompt:
+            asked.append("agree")
+            return verdict
         asked.append("translator")
-        return "Lagos is the largest city in Nigeria."
+        return translator_says
 
-    judge = GenerativeJudge("hosted", judge_model, translator=translator)
-    assert judge.translate("Èkó ni ìlú tó tóbi jùlọ ní Nàìjíríà.") == (
-        "Lagos is the largest city in Nigeria."
+    return GenerativeJudge("hosted", judge_model, translator=translator), asked
+
+
+def test_two_translations_must_make_the_same_claim() -> None:
+    same, asked = _models(
+        "Lagos is the largest city in Nigeria.", "Lagos is the largest city in Nigeria."
     )
-    assert asked == ["translator"]
+    assert (
+        same.translate("Èkó ni ìlú tó tóbi jùlọ ní Nàìjíríà.")
+        == "Lagos is the largest city in Nigeria."
+    )
+    assert asked == ["translator", "judge"]
+
+    worded, asked = _models(
+        "Nairobi is the capital city of Uganda.", "Nairobi is the capital of Uganda."
+    )
+    assert worded.translate("Nairobi ni mji mkuu wa Uganda.") == "Nairobi is the capital of Uganda."
+    assert asked == ["translator", "judge", "agree"]
+
+    flipped, _asked = _models(
+        "Lagos is the capital of Ghana.", "Lagos is not the capital of Ghana.", verdict="No."
+    )
+    assert flipped.translate("Lagos ni olú-ìlú Gánà.") is None
+
+    alone = GenerativeJudge("hosted", lambda _prompt: "Tokyo is the capital of Japan.")
+    assert alone.translate("東京は日本の首都です。") == "Tokyo is the capital of Japan."
     assert translate_with(NullJudge(), "x") is None
     assert GenerativeJudge("off", None).translate("x") is None
     hosted = HostedJudge("https://ai.example/v1", "m", "key", translate_model="t")
@@ -177,14 +203,108 @@ def test_a_living_thing_shows_where_it_sits(polite_http, http_mock):
             else {"entities": {"Q36101": koala}},
         )
     )
+    entity = "http://www.wikidata.org/entity/"
+
+    def row(taxon: str, parent: str | None, rank: str | None, label: str) -> dict[str, Any]:
+        cells: dict[str, Any] = {"taxon": {"value": entity + taxon}, "label": {"value": label}}
+        if parent:
+            cells["parent"] = {"value": entity + parent}
+        if rank:
+            cells["rank"] = {"value": entity + rank}
+        return cells
+
+    # koala -> Phascolarctos -> mammal (class) -> a wider class-ranked clade.
     rows = [
-        {"rank": {"value": "http://www.wikidata.org/entity/Q37517"}, "label": {"value": "mammal"}},
-        {"rank": {"value": "http://www.wikidata.org/entity/Q7432"}, "label": {"value": "koala"}},
+        row("Q36101", "Q2", "Q7432", "koala"),
+        row("Q2", "Q7377", "Q34740", "Phascolarctos"),
+        row("Q7377", "Q9", "Q37517", "mammal"),
+        row("Q9", None, "Q37517", "synapsid"),
     ]
     http_mock.get("https://query.wikidata.org/sparql").mock(
         return_value=httpx.Response(200, json={"results": {"bindings": rows}})
     )
     found = WikidataRetriever(polite_http).retrieve("Koalas are marsupials.")
-    assert "classification: species koala; class mammal" in found.passages[0].text
+    passage = found.passages[0]
+    assert "classification: species koala; genus Phascolarctos; class mammal" in passage.text
+    assert "synapsid" not in passage.text
+    assert passage.about == "Koalas"
     plain = render_item("Q1", koala, {}, "en")
     assert plain is not None and "classification" not in plain.text
+
+
+def test_a_passage_looked_up_by_the_claims_name_is_about_it() -> None:
+    from verifai.experts.claim_check import on_topic
+    from verifai.retrieval.wikidata import entity_names
+
+    anura = Passage(
+        source="wikidata",
+        family="wikidata",
+        title="Anura",
+        url=None,
+        text="Anura (order of tailless amphibians).",
+        about="Frogs",
+    )
+    assert on_topic("Frogs are amphibians.", anura)
+    stray = Passage(source="wikidata", family="wikidata", title="X", url=None, text="Unrelated.")
+    assert not on_topic("Frogs are amphibians.", stray)
+    assert entity_names("The first iPhone was released in 2007.") == ["iPhone"]
+
+
+def test_what_a_claim_says_about_its_subject_picks_the_item() -> None:
+    gold: list[dict[str, Any]] = [
+        {"id": "Q1", "label": "Gold Coast", "description": "city in Queensland, Australia"},
+        {"id": "Q897", "label": "gold", "description": "chemical element with symbol Au"},
+    ]
+    reach = {"Q1": 120, "Q897": 250}
+    assert _pick(gold, "Gold", "Gold is a chemical element.", reach, fold=True) == "Q897"
+    apple: list[dict[str, Any]] = [
+        {"id": "Q89", "label": "apple", "description": "edible fruit of the apple tree"},
+        {"id": "Q312", "label": "Apple Inc.", "description": "American technology company"},
+    ]
+    reach = {"Q89": 300, "Q312": 200}
+    assert _pick(apple, "Apple", "Apple was founded in 1976.", reach, fold=True) == "Q312"
+
+
+class _DisagreeingJudge(_TranslatingJudge):
+    def translate(self, text: str) -> None:  # type: ignore[override]
+        del text
+
+
+def test_a_claim_that_cannot_be_translated_reliably_gets_no_verdict() -> None:
+    wiki = _Recorder("wikipedia", _passage("wikipedia", "Ghana", "https://en.wikipedia.org/Ghana"))
+    data = _Recorder("wikidata", _passage("wikidata", "Lagos", "https://www.wikidata.org/Q8673"))
+    judge = _DisagreeingJudge()
+    result = check_claim(
+        expert="general",
+        scope="general",
+        claim="Lagos ni olú-ìlú Gánà.",
+        retrievers=[wiki, data],
+        judge=judge,
+        workers=1,
+    )
+    assert result.verdict.value == "unverifiable"
+    assert judge.claims == []
+    assert len(result.evidence) == 2
+    assert "could not translate this claim reliably" in result.explanation
+
+
+def test_the_card_shows_the_translation_and_an_uncertain_one() -> None:
+    from verifai.schemas import CombinedClaim, Verdict
+    from verifai.web.view import claim_card
+
+    read = CombinedClaim(
+        claim="Abuja ni olú-ìlú Nàìjíríà.",
+        verdict=Verdict.SUPPORTED,
+        confidence=0.88,
+        explanation="Agreed. Sources were searched with the English translation “Abuja is the capital of Nigeria.”.",
+    )
+    assert claim_card(read).translation == "Abuja is the capital of Nigeria."
+    doubtful = CombinedClaim(
+        claim="Lagos ni olú-ìlú Gánà.",
+        verdict=Verdict.UNVERIFIABLE,
+        confidence=0.0,
+        explanation="VerifAI could not translate this claim reliably: two translations disagreed.",
+    )
+    card = claim_card(doubtful)
+    assert "Translation uncertain: try it in English" in card.flags
+    assert card.headline.startswith("Two translations disagreed")

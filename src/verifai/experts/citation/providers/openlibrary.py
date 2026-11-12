@@ -32,6 +32,9 @@ class OpenLibraryProvider:
         venue = publishers[0] if isinstance(publishers, list) and publishers else None
         key = body.get("key") if isinstance(body.get("key"), str) else None
         authors = self._authors(body)
+        sources = body.get("source_records")
+        catalogued = isinstance(sources, list) and bool(sources)
+        real_publisher = isinstance(venue, str) and venue.casefold() != body["title"].casefold()
         record = Record(
             source=self.name,
             title=body["title"],
@@ -43,6 +46,7 @@ class OpenLibraryProvider:
             doi=None,
             url=f"https://openlibrary.org{key}" if key else f"https://openlibrary.org/isbn/{isbn}",
             record_id=isbn,
+            trusted=bool(authors) or (catalogued and real_publisher),
         )
         return ProviderOutcome(self.name, unavailable=False, records=[record])
 
@@ -61,7 +65,7 @@ class OpenLibraryProvider:
         author = result.json_body() if result.ok else None
         name = author.get("name") if isinstance(author, dict) else None
         # The edition lists an author even when that lookup fails.
-        return [name] if isinstance(name, str) and name.strip() else ["author on record"]
+        return [name] if isinstance(name, str) and name.strip() else ["an author on record"]
 
 
 def _year(value: object) -> int | None:

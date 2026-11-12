@@ -114,6 +114,7 @@ class WikipediaRetriever:
                     if isinstance(url, str)
                     else f"https://{lang}.wikipedia.org/wiki/" + heading.replace(" ", "_"),
                     text=_strip_markup(extract)[:2000],
+                    about=_original_name(names, order, heading),
                 )
             )
         return found[:2]
@@ -163,6 +164,11 @@ class WikipediaRetriever:
                 )
             )
         return passages
+
+
+def _original_name(names: list[str], order: list[str], title: str) -> str | None:
+    """The claim's own words for an article reached through a redirect."""
+    return names[order.index(title)] if title in order else None
 
 
 def _rank(order: list[str], title: object) -> int:

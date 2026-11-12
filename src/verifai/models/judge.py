@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import platform
+import re
 import time
 from collections.abc import Callable
 from typing import Any, Protocol, cast
@@ -19,10 +20,12 @@ from verifai.config import Settings
 from verifai.corroboration import Stance
 from verifai.models.parsing import (
     Judgment,
+    agreement_prompt,
     judgment_prompt,
     map_nli_rows,
     parse_judgment,
     parse_translation,
+    parse_yes,
     translation_prompt,
 )
 
@@ -81,14 +84,32 @@ class GenerativeJudge:
         return parse_judgment(raw)
 
     def translate(self, text: str) -> str | None:
-        """The claim in English, for searching sources. None if the model cannot say."""
+        """The claim in English, for searching sources. None if it cannot be trusted.
+
+        With a separate translation model, the judge model translates too,
+        and the two must make the same claim. In testing, one model alone
+        once added a "not" to a Yoruba claim, which turned a false claim
+        into a supported one. Disagreement means no translation at all.
+        """
         complete = self._translator or self._complete
         if complete is None:
             return None
         try:
-            return parse_translation(complete(translation_prompt(text)))
+            first = parse_translation(complete(translation_prompt(text)))
+            if first is None or self._translator is None or self._complete is None:
+                return first
+            second = parse_translation(self._complete(translation_prompt(text)))
+            if second is None:
+                return None
+            if _plain(first) == _plain(second):
+                return first
+            return first if parse_yes(self._translator(agreement_prompt(first, second))) else None
         except (OSError, TimeoutError, ValueError, RuntimeError, httpx.HTTPError):
             return None
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.findall(r"\w+", text.casefold()))
 
 
 def translate_with(judge: object, text: str) -> str | None:

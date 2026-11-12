@@ -20,6 +20,9 @@ class Record:
     # Retraction, withdrawal, or expression-of-concern notices, newest last.
     notices: list[str] = field(default_factory=list)
     retracted: bool = False
+    # False for a catalogue entry anyone could have added with nothing to
+    # back it: no author, no source record, publisher the same as the title.
+    trusted: bool = True
 
 
 @dataclass

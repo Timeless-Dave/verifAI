@@ -26,6 +26,9 @@ class Passage:
     rating: str | None = None
     # The statement a fact-checker rated, when it is not the claim itself.
     reviewed_claim: str | None = None
+    # The name in the claim this passage was looked up by: the item or
+    # article for "Frogs" is about frogs even when it is titled "Anura".
+    about: str | None = None
 
 
 @dataclass

@@ -129,6 +129,9 @@ button, .masthead-strap, .masthead-nav, .promises, .site-foot, .evidence .source
 @keyframes read { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes stamp { from { opacity: 0; transform: rotate(-3deg) scale(1.6); } to { opacity: 1; transform: rotate(-3deg) scale(1); } }
 
+.translated { display: flex; gap: 8px; align-items: flex-start; margin: -2px 0 8px; font-size: 15px; color: var(--ink-2); }
+.translated .icon { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+
 /* How it works, as four steps */
 .how { margin: 40px 0 0; padding-top: 14px; border-top: 3px solid var(--rule); }
 .how-title { margin: 0 0 4px; font: 700 12px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }

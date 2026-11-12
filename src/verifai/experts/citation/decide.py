@@ -302,9 +302,9 @@ def decide_isbn(citation: ExtractedCitation, outcome: ProviderOutcome | None) ->
             unavailable=[],
         )
     record = outcome.records[0]
-    if not record.authors:
-        # Anyone can add an Open Library edition. One with no author, often
-        # spam, cannot confirm a book.
+    if not record.trusted:
+        # Anyone can add an Open Library edition. One with no author and no
+        # catalogue behind it, often spam, cannot confirm a book.
         return _result(
             citation,
             status=CitationStatus.UNREACHABLE,

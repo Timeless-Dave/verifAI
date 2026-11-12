@@ -147,7 +147,7 @@ def test_later_batches_update_the_counts(http_mock: respx.MockRouter) -> None:
         )
 
 
-def _book(title: str, authors: list[str]) -> ProviderOutcome:
+def _book(title: str, authors: list[str], *, trusted: bool | None = None) -> ProviderOutcome:
     record = Record(
         source="openlibrary",
         title=title,
@@ -158,6 +158,7 @@ def _book(title: str, authors: list[str]) -> ProviderOutcome:
         venue="MIT Press",
         doi=None,
         url="https://openlibrary.org/books/OL1M",
+        trusted=bool(authors) if trusted is None else trusted,
     )
     return ProviderOutcome("openlibrary", unavailable=False, records=[record])
 
@@ -188,6 +189,10 @@ def test_an_isbn_record_must_be_a_real_book_and_the_book_named() -> None:
     assert right.status is CitationStatus.VERIFIED
     bare = decide_isbn(_isbn(None), _book("Introduction to Algorithms", ["Thomas H. Cormen"]))
     assert bare.status is CitationStatus.VERIFIED
+    # Effective Java's edition names no author, but a bookseller catalogue
+    # and a real publisher stand behind it.
+    catalogued = decide_isbn(_isbn(None), _book("Effective Java", [], trusted=True))
+    assert catalogued.status is CitationStatus.VERIFIED
 
 
 def test_isbn_context_is_the_words_on_its_line() -> None:

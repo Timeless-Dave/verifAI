@@ -79,6 +79,21 @@ def translation_prompt(text: str) -> str:
     )
 
 
+def agreement_prompt(first: str, second: str) -> str:
+    return (
+        "Two translations of the same sentence are below. Do they make the same factual "
+        "claim? Wording does not matter (capital and capital city are the same). A different "
+        "place, person, number, date, or a negation in one but not the other is a different "
+        "claim. Answer yes or no only.\n"
+        f"A: {_fence(first)[:400]}\nB: {_fence(second)[:400]}"
+    )
+
+
+def parse_yes(raw: str) -> bool:
+    words = re.findall(r"[a-z]+", _THINK.sub("", raw or "").casefold())
+    return bool(words) and words[0] == "yes"
+
+
 def parse_translation(raw: str) -> str | None:
     """The model's English sentence, or None when it gave nothing usable."""
     text = _THINK.sub("", raw or "")

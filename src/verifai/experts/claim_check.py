@@ -55,6 +55,23 @@ def check_claim(
         )
     else:
         outcomes = _retrieve_all(retrievers, claim, workers)
+    # Two translations that disagree mean the claim's meaning is in doubt. A
+    # judge reading the original would be guessing at it too, so no source
+    # gets a vote: the sources are listed, and the claim stays unverified.
+    unreadable = english is None and needs_english(claim) and judge.available()
+    if unreadable:
+        note = " ".join(
+            part
+            for part in (
+                (
+                    "VerifAI could not translate this claim reliably: two translations "
+                    "disagreed about what it says. Its sources are listed, but none was "
+                    "counted. Try the claim in English."
+                ),
+                note,
+            )
+            if part
+        )
     evidence: list[EvidenceItem] = []
     votes: list[SourceVote] = []
     consulted: list[str] = []
@@ -69,7 +86,13 @@ def check_claim(
             continue
         contributed.append(outcome.source)
         for passage in outcome.passages:
-            judgment = screen(claim, passage, _judge(judge, claim, passage))
+            judgment = (
+                Judgment(
+                    Stance.NEUTRAL, 0.0, "Not counted: the claim could not be translated reliably."
+                )
+                if unreadable
+                else screen(claim, passage, _judge(judge, claim, passage))
+            )
             if passage.publication_type and "review" in passage.publication_type:
                 saw_review = True
             if passage.native_stance is None and passage.text and not judge.available():
@@ -248,6 +271,8 @@ def on_topic(claim: str, passage: Passage) -> bool:
     small model says. Terms match on their first five letters, so
     "vaccine" also finds "vaccination".
     """
+    if passage.about and passage.about.casefold() in claim.casefold():
+        return True
     terms = key_terms(claim)
     if not terms:
         return True

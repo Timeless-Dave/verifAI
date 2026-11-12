@@ -72,6 +72,8 @@ class ClaimCard:
     health: bool
     judged: bool = True
     found: int = 0
+    # The English the sources were searched with, for a claim in another language.
+    translation: str | None = None
 
 
 @dataclass(frozen=True)
@@ -213,6 +215,9 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
         flags.append("Cites a retracted paper")
     if "may be made up" in claim.explanation:
         flags.append("Cites a source that could not be found")
+    unreadable = "could not translate this claim reliably" in claim.explanation
+    if unreadable:
+        flags.append("Translation uncertain: try it in English")
     if claim.verdict is Verdict.UNVERIFIABLE and refute and not support:
         flags.append("Every source that took a side contradicts it")
     elif claim.verdict is Verdict.UNVERIFIABLE and support and not refute:
@@ -243,6 +248,8 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
     else:
         badge = VERDICT_BADGES[claim.verdict]
         headline = claim_headline(claim.verdict, support, refute, claim.evidence)
+        if unreadable:
+            headline = "Two translations disagreed about what this says, so no source was counted."
     return ClaimCard(
         text=claim.claim,
         badge=badge,
@@ -258,7 +265,16 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
         explanation=claim.explanation,
         groups=groups,
         health="health" in claim.experts,
+        translation=_translation(claim.explanation),
     )
+
+
+_TRANSLATED = re.compile(r"searched with the English translation “([^”]+)”")
+
+
+def _translation(explanation: str) -> str | None:
+    match = _TRANSLATED.search(explanation)
+    return match.group(1) if match else None
 
 
 def claim_headline(

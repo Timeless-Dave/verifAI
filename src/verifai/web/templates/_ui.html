@@ -58,6 +58,7 @@
       {% for flag in card.flags %}<span class="tag tag-alert">{{ icon("i-alert") }}{{ flag }}</span>{% endfor %}
     </div>
     <h3 class="claim-text">{{ card.text }}</h3>
+    {% if card.translation %}<p class="translated">{{ icon("i-globe") }}<span><span class="muted">Read in English as</span> “{{ card.translation }}”</span></p>{% endif %}
     <p class="claim-line">{{ card.headline }}</p>
     {% if card.judged %}{{ balance(card) }}{% endif %}
     {% if card.confidence is not none %}{{ meter(card.confidence, card.badge.tone) }}{% endif %}

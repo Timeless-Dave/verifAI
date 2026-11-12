@@ -30,6 +30,14 @@ _RANKS = {
     "Q36732": "kingdom",
 }
 _RANK_ORDER = list(_RANKS.values())
+# Words in a claim that say what kind of thing its subject is: "Apple was
+# founded" is about a company, so a company's description should match.
+_COMPANY = frozenset({"company", "corporation", "business", "enterprise", "organization", "brand"})
+_HINTS = {
+    "founded": _COMPANY,
+    "headquartered": _COMPANY,
+    "released": frozenset({"album", "film", "song", "smartphone", "product", "software"}),
+}
 _MAX_ITEMS = 3
 _MAX_VALUES = 4
 _MAX_CHARS = 1600
@@ -121,7 +129,8 @@ _MONTHS = [
 
 _CONNECTOR = r"(?:of|van|von|de|der|den|du|la|le|da|di|the|and)"
 _NAME = re.compile(
-    rf"[A-Z][\w'’.\-]*[\w'’](?:\s+(?:{_CONNECTOR}\s+)*[A-Z][\w'’.\-]*[\w'’])*",
+    rf"(?:[A-Z]|\b[a-z]{{1,2}}(?=[A-Z]))[\w'’.\-]*[\w'’]"
+    rf"(?:\s+(?:{_CONNECTOR}\s+)*[A-Z][\w'’.\-]*[\w'’])*",
 )
 _EVENT = re.compile(
     r"\b((?:19|20)\d{2})\s+((?:[A-Za-z.]+\s+){0,4}?"
@@ -216,13 +225,15 @@ class WikidataRetriever:
             return RetrievalResult(self.name, unavailable=True, error="Wikidata search failed")
         reach = self._sitelinks([str(hit["id"]) for _name, hits in searched for hit in hits])
         ids: list[str] = []
+        named: dict[str, str] = {}
         for name, hits in searched:
             # "Bats are blind" capitalises Bats only because it starts the
             # sentence. Then case says nothing: the bat, not the French village.
-            opening = bool(_singular(name)) and self._claim.lstrip().startswith(name)
+            opening = " " not in name and self._claim.lstrip().startswith(name)
             found = _pick(hits, name, self._claim, reach, also=_singular(name), fold=opening)
             if found and found not in ids:
                 ids.append(found)
+                named[found] = name
         if not ids:
             return RetrievalResult(self.name)
         # One item at a time: a big item (a country) can pass the size cap
@@ -240,7 +251,12 @@ class WikidataRetriever:
             if qid in entities
             and (
                 passage := render_item(
-                    qid, entities[qid], labels, lang, lineage=self._lineage(qid, entities[qid])
+                    qid,
+                    entities[qid],
+                    labels,
+                    lang,
+                    lineage=self._lineage(qid, entities[qid]),
+                    about=named.get(qid),
                 )
             )
             is not None
@@ -255,21 +271,44 @@ class WikidataRetriever:
         """
         if not _dict(item.get("claims")).get("P171") or not re.fullmatch(r"Q\d+", qid):
             return ""
-        ranks = " ".join(f"wd:{rank}" for rank in _RANKS)
+        # Walk the parent links from the item up, so each rank takes its
+        # nearest ancestor: a penguin's class is bird, not the reptile clade
+        # Wikidata also files birds under.
         query = (
-            f"SELECT ?rank ?label WHERE {{ wd:{qid} wdt:P171* ?taxon . ?taxon wdt:P105 ?rank . "
-            f"VALUES ?rank {{ {ranks} }} ?taxon rdfs:label ?label . FILTER(LANG(?label) = 'en') }}"
+            f"SELECT ?taxon ?parent ?rank ?label WHERE {{ wd:{qid} wdt:P171* ?taxon . "
+            "OPTIONAL { ?taxon wdt:P171 ?parent } OPTIONAL { ?taxon wdt:P105 ?rank } "
+            "OPTIONAL { ?taxon rdfs:label ?label . FILTER(LANG(?label) = 'en') } }"
         )
         body, _error = fetch_json(
             self.http, _SPARQL, {"query": query, "format": "json"}, source=self.name
         )
         rows = (body or {}).get("results", {}).get("bindings", []) if body else []
-        found: dict[str, str] = {}
+        parent: dict[str, str] = {}
+        rank_of: dict[str, str] = {}
+        label_of: dict[str, str] = {}
         for row in rows if isinstance(rows, list) else []:
-            rank = str(row.get("rank", {}).get("value", "")).rsplit("/", 1)[-1]
-            label = row.get("label", {}).get("value")
-            if rank in _RANKS and isinstance(label, str):
-                found.setdefault(_RANKS[rank], label)
+            taxon = _entity(row, "taxon")
+            if not taxon:
+                continue
+            up = _entity(row, "parent")
+            if up:
+                parent.setdefault(taxon, up)
+            rank = _entity(row, "rank")
+            if rank in _RANKS:
+                rank_of.setdefault(taxon, _RANKS[rank])
+            cell = row.get("label")
+            label = cell.get("value") if isinstance(cell, dict) else None
+            if isinstance(label, str):
+                label_of.setdefault(taxon, label)
+        found: dict[str, str] = {}
+        node: str | None = qid
+        for _step in range(60):
+            if node is None:
+                break
+            rank_name = rank_of.get(node)
+            if rank_name and rank_name not in found and node in label_of:
+                found[rank_name] = label_of[node]
+            node = parent.get(node)
         return "; ".join(f"{rank} {found[rank]}" for rank in _RANK_ORDER if rank in found)
 
     def _search(self, name: str, lang: str) -> tuple[list[dict[str, Any]], bool]:
@@ -349,6 +388,12 @@ def _words(text: str) -> set[str]:
     return set(re.findall(r"[^\W\d_]{4,}", text.casefold()))
 
 
+def _entity(row: dict[str, Any], key: str) -> str:
+    cell = row.get(key)
+    value = cell.get("value") if isinstance(cell, dict) else None
+    return str(value).rsplit("/", 1)[-1] if isinstance(value, str) else ""
+
+
 def _singular(name: str) -> str:
     """ "Spiders" gives "spider". Only one-word plurals, and not "Paris" or "Texas"."""
     if " " in name or len(name) < 4 or not name.endswith("s") or name.endswith(("ss", "us", "is")):
@@ -378,6 +423,9 @@ def _pick(
     if not hits:
         return None
     context = _words(claim) - _words(name)
+    for cue, hints in _HINTS.items():
+        if cue in context:
+            context |= hints
     ranked = sorted(
         enumerate(hits),
         key=lambda pair: (
@@ -449,7 +497,13 @@ def entity_names(claim: str) -> list[str]:
 
 
 def render_item(
-    qid: str, item: dict[str, Any], labels: dict[str, str], lang: str, *, lineage: str = ""
+    qid: str,
+    item: dict[str, Any],
+    labels: dict[str, str],
+    lang: str,
+    *,
+    lineage: str = "",
+    about: str | None = None,
 ) -> Passage | None:
     label = _label(item, lang)
     if not label:
@@ -477,6 +531,7 @@ def render_item(
         url=f"https://www.wikidata.org/wiki/{qid}",
         text=text[:_MAX_CHARS],
         document_ids=(f"wikidata:{qid}",),
+        about=about,
     )
 
 
