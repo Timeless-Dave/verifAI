@@ -70,35 +70,30 @@ def test_text_helpers():
 
 
 def test_wikipedia_extract_and_snippet_fallback(polite_http, http_mock):
-    http_mock.get("https://en.wikipedia.org/w/api.php").mock(
-        side_effect=[
-            httpx.Response(
-                200,
-                json={
-                    "query": {"search": [{"title": "Eiffel Tower", "pageid": 1, "snippet": "iron"}]}
-                },
-            ),
-            httpx.Response(
-                200,
-                json={
-                    "query": {
-                        "pages": {
-                            "1": {
-                                "extract": "The tower is in Paris.",
-                                "fullurl": "https://en.wikipedia.org/wiki/Eiffel_Tower",
-                            }
-                        }
-                    }
-                },
-            ),
-            httpx.Response(
-                200, json={"query": {"search": [{"title": "Bare", "snippet": "only snippet"}]}}
-            ),
-            httpx.Response(503, text="down"),
-            httpx.Response(200, json={"query": {}}),
-            httpx.Response(200, text="nope"),
-        ]
-    )
+    def api(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if "titles" in params:
+            return httpx.Response(200, json={"query": {"pages": {"-1": {"missing": ""}}}})
+        if "pageids" in params:
+            page = {
+                "extract": "The tower is in Paris.",
+                "fullurl": "https://en.wikipedia.org/wiki/Eiffel_Tower",
+            }
+            return httpx.Response(200, json={"query": {"pages": {"1": page}}})
+        search = params["srsearch"].casefold()
+        if "eiffel" in search:
+            hit = {"title": "Eiffel Tower", "pageid": 1, "snippet": "iron"}
+            return httpx.Response(200, json={"query": {"search": [hit]}})
+        if "bare" in search:
+            hit = {"title": "Bare", "snippet": "only snippet"}
+            return httpx.Response(200, json={"query": {"search": [hit]}})
+        if "anything" in search:
+            return httpx.Response(503, text="down")
+        if "another" in search:
+            return httpx.Response(200, json={"query": {}})
+        return httpx.Response(200, text="nope")
+
+    http_mock.get("https://en.wikipedia.org/w/api.php").mock(side_effect=api)
     wiki = WikipediaRetriever(polite_http)
     found = wiki.retrieve("How tall is the Eiffel Tower in Paris?")
     assert found.passages[0].text.startswith("The tower")
@@ -112,6 +107,37 @@ def test_wikipedia_extract_and_snippet_fallback(polite_http, http_mock):
     bad = wiki.retrieve("json failed for this query")
     assert bad.unavailable
     assert wiki.retrieve("   ").passages == []
+
+
+def test_wikipedia_puts_the_article_the_claim_names_first(polite_http, http_mock):
+    def api(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if "titles" in params:
+            assert params["titles"] == "Napoleon Bonaparte|Corsica"
+            pages = {
+                "5": {"title": "Corsica", "extract": "Corsica is an island.", "fullurl": "u5"},
+                "6": {"title": "Napoleon", "extract": "Napoleon was born in Ajaccio."},
+                "7": {"title": "Mercury", "extract": "Mercury may refer to: a planet"},
+            }
+            redirects = [{"from": "Napoleon Bonaparte", "to": "Napoleon"}]
+            return httpx.Response(200, json={"query": {"pages": pages, "redirects": redirects}})
+        if "pageids" in params:
+            page = {"title": "Letizia Bonaparte", "extract": "His mother."}
+            return httpx.Response(200, json={"query": {"pages": {"9": page}}})
+        hits = [
+            {"title": "Napoleon", "pageid": 6},
+            {"title": "Letizia Bonaparte", "pageid": 9},
+        ]
+        return httpx.Response(200, json={"query": {"search": hits}})
+
+    http_mock.get("https://en.wikipedia.org/w/api.php").mock(side_effect=api)
+    found = WikipediaRetriever(polite_http).retrieve("Napoleon Bonaparte was born in Corsica.")
+    assert [passage.title for passage in found.passages] == [
+        "Napoleon",
+        "Corsica",
+        "Letizia Bonaparte",
+    ]
+    assert found.passages[0].url == "https://en.wikipedia.org/wiki/Napoleon"
 
 
 def test_wikidata(polite_http, http_mock):

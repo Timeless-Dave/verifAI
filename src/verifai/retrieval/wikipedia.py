@@ -7,6 +7,9 @@ from typing import Any
 from verifai.http import PoliteHttp
 from verifai.retrieval.textutil import detect_language, fetch_json, search_terms_for
 from verifai.retrieval.types import Passage, RetrievalResult
+from verifai.retrieval.wikidata import entity_names
+
+_DISAMBIGUATION = ("may refer to", "may also refer to", "can refer to")
 
 
 def _api(lang: str) -> str:
@@ -42,11 +45,78 @@ class WikipediaRetriever:
         )
         if body is None:
             return RetrievalResult(self.name, unavailable=True, error=error)
-        hits = _search_hits(body)[: self.limit]
-        if not hits:
-            return RetrievalResult(self.name)
-        passages = self._extracts(hits, lang)
+        # The article the claim is about comes first. A keyword search for
+        # "Napoleon born Corsica" ranks his mother's article above his own.
+        named = self._named(query, lang)
+        seen = {passage.title for passage in named}
+        hits = [hit for hit in _search_hits(body) if hit.get("title") not in seen]
+        hits = hits[: max(self.limit - len(named), 1)]
+        passages = named + (self._extracts(hits, lang) if hits else [])
         return RetrievalResult(self.name, passages=passages)
+
+    def _named(self, query: str, lang: str) -> list[Passage]:
+        """Articles titled with the names the claim uses, redirects followed."""
+        names = [name[:1].upper() + name[1:] for name in entity_names(query)[:2]]
+        if not names:
+            return []
+        body, _error = fetch_json(
+            self.http,
+            _api(lang),
+            {
+                "action": "query",
+                "titles": "|".join(names),
+                "redirects": 1,
+                "prop": "extracts|info",
+                "exintro": 1,
+                "explaintext": 1,
+                "inprop": "url",
+                "format": "json",
+            },
+            source=self.name,
+        )
+        query_part = body.get("query") if body else None
+        if not isinstance(query_part, dict) or not isinstance(query_part.get("pages"), dict):
+            return []
+        pages: dict[str, Any] = query_part["pages"]
+        # Keep the claim's own order: its subject first.
+        moved: dict[str, str] = {}
+        for step in ("normalized", "redirects"):
+            for hop in query_part.get(step) or []:
+                if isinstance(hop, dict):
+                    moved[str(hop.get("from"))] = str(hop.get("to"))
+        order: list[str] = []
+        for name in names:
+            title = name
+            for _ in range(3):
+                title = moved.get(title, title)
+            order.append(title)
+        found: list[Passage] = []
+        ranked = sorted(
+            (page for page in pages.values() if isinstance(page, dict)),
+            key=lambda page: _rank(order, page.get("title")),
+        )
+        for page in ranked:
+            extract = page.get("extract")
+            heading = page.get("title")
+            if "missing" in page or not isinstance(extract, str) or not isinstance(heading, str):
+                continue
+            if not extract.strip():
+                continue
+            if any(marker in extract[:300] for marker in _DISAMBIGUATION):
+                continue
+            url = page.get("fullurl")
+            found.append(
+                Passage(
+                    source=self.name,
+                    family="wikipedia",
+                    title=heading,
+                    url=url
+                    if isinstance(url, str)
+                    else f"https://{lang}.wikipedia.org/wiki/" + heading.replace(" ", "_"),
+                    text=_strip_markup(extract)[:2000],
+                )
+            )
+        return found[:2]
 
     def _extracts(self, hits: list[dict[str, Any]], lang: str = "en") -> list[Passage]:
         pageids = "|".join(str(hit["pageid"]) for hit in hits if hit.get("pageid"))
@@ -93,6 +163,10 @@ class WikipediaRetriever:
                 )
             )
         return passages
+
+
+def _rank(order: list[str], title: object) -> int:
+    return order.index(title) if isinstance(title, str) and title in order else len(order)
 
 
 def _search_hits(body: dict[str, Any]) -> list[dict[str, Any]]:
