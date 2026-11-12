@@ -418,6 +418,24 @@ def detect_language(text: str) -> str:
     return "en"
 
 
+def needs_english(text: str) -> bool:
+    """True when ``text`` is not English, so its sources should be searched in English.
+
+    A detected language says so. A Latin-script sentence with no English
+    function word, such as Yoruba or Swahili, is not English either.
+    """
+    if detect_language(text) != "en":
+        return True
+    words = [word.casefold() for word in _TOKEN.findall(text or "")]
+    if len(words) < 3:
+        return False
+    if any(not char.isascii() for char in text if char.isalpha()) and not any(
+        word in _MARKERS["en"] for word in words
+    ):
+        return True
+    return not any(word in _MARKERS["en"] for word in words)
+
+
 def search_terms_for(text: str, lang: str, *, limit: int = 8) -> list[str]:
     """Search terms with that language's function words removed."""
     if lang == "en":

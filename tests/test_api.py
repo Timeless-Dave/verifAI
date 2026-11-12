@@ -7,7 +7,7 @@ def test_homepage_and_form_and_json(client, http_mock):
     install(http_mock)
     home = client.get("/")
     assert home.status_code == 200
-    assert "Is it true? Is the source real?" in home.text
+    assert "Check it before you share it." in home.text
     assert "Crossref" in home.text
     assert "OpenAlex" in home.text
     assert "if one is down" in home.text

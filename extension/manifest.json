@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "VerifAI",
   "version": "0.3.0",
-  "description": "Check claims on news, health, and chatbot pages against a VerifAI server: your own, or a public one you choose.",
+  "description": "Does the fact-checking legwork for you: checks claims and citations on news, health, and chatbot pages, with every source linked.",
   "homepage_url": "https://useverifai.vercel.app",
   "icons": {
     "16": "icons/icon-16.png",

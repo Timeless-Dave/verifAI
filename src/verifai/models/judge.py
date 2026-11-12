@@ -17,7 +17,14 @@ import httpx
 
 from verifai.config import Settings
 from verifai.corroboration import Stance
-from verifai.models.parsing import Judgment, judgment_prompt, map_nli_rows, parse_judgment
+from verifai.models.parsing import (
+    Judgment,
+    judgment_prompt,
+    map_nli_rows,
+    parse_judgment,
+    parse_translation,
+    translation_prompt,
+)
 
 Complete = Callable[[str], str]
 
@@ -50,9 +57,12 @@ class NullJudge:
 
 
 class GenerativeJudge:
-    def __init__(self, name: str, complete: Complete | None) -> None:
+    def __init__(
+        self, name: str, complete: Complete | None, *, translator: Complete | None = None
+    ) -> None:
         self.name = name
         self._complete = complete
+        self._translator = translator
 
     def available(self) -> bool:
         return self._complete is not None
@@ -69,6 +79,25 @@ class GenerativeJudge:
                 f"The local model did not answer ({type(exc).__name__}).",
             )
         return parse_judgment(raw)
+
+    def translate(self, text: str) -> str | None:
+        """The claim in English, for searching sources. None if the model cannot say."""
+        complete = self._translator or self._complete
+        if complete is None:
+            return None
+        try:
+            return parse_translation(complete(translation_prompt(text)))
+        except (OSError, TimeoutError, ValueError, RuntimeError, httpx.HTTPError):
+            return None
+
+
+def translate_with(judge: object, text: str) -> str | None:
+    """Ask any judge that can translate. Others, such as NLI, cannot."""
+    translate = getattr(judge, "translate", None)
+    if not callable(translate):
+        return None
+    result = translate(text)
+    return result if isinstance(result, str) else None
 
 
 class NliJudge:
@@ -156,6 +185,14 @@ class MlxJudge(GenerativeJudge):
                 return Judgment(Stance.NEUTRAL, 0.0, f"MLX could not load ({type(exc).__name__}).")
         return super().judge(claim, passage)
 
+    def translate(self, text: str) -> str | None:
+        if self._enabled and self._complete is None:
+            try:
+                self._complete = mlx_complete(self.model_id)
+            except (OSError, RuntimeError, ValueError, ImportError):
+                return None
+        return super().translate(text)
+
 
 class OllamaJudge(GenerativeJudge):
     def __init__(self, base_url: str, model: str, *, client: httpx.Client | None = None) -> None:
@@ -168,10 +205,21 @@ class HostedJudge(GenerativeJudge):
     """An open-weights model served behind an OpenAI-compatible chat API."""
 
     def __init__(
-        self, base_url: str, model: str, api_key: str, *, client: httpx.Client | None = None
+        self,
+        base_url: str,
+        model: str,
+        api_key: str,
+        *,
+        client: httpx.Client | None = None,
+        translate_model: str = "",
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
+        translator = (
+            _llamacpp_complete(self.base_url, translate_model, client, api_key=api_key)
+            if self.base_url and api_key and translate_model and translate_model != model
+            else None
+        )
         complete = (
             _llamacpp_complete(self.base_url, model, client, api_key=api_key)
             if self.base_url and api_key
@@ -185,7 +233,7 @@ class HostedJudge(GenerativeJudge):
             def complete(prompt: str) -> str:
                 return inner(f"{prompt}\n/no_think")
 
-        super().__init__("hosted", complete)
+        super().__init__("hosted", complete, translator=translator)
 
 
 class LlamaCppJudge(GenerativeJudge):
@@ -311,6 +359,9 @@ class AutoJudge:
             return fallback.judge(claim, passage)
         return judgment
 
+    def translate(self, text: str) -> str | None:
+        return translate_with(self._pick(), text)
+
     def _pick(self) -> Judge:
         if self._chosen is None:
             self._chosen = pick_auto(self._settings, skip=self._skip)
@@ -332,7 +383,12 @@ def build_judge(settings: Settings) -> Judge:
     if backend == "remote":
         return RemoteJudge(settings.remote_judge_url, settings.judge_token)
     if backend == "hosted":
-        return HostedJudge(settings.hosted_base_url, settings.hosted_model, settings.hosted_api_key)
+        return HostedJudge(
+            settings.hosted_base_url,
+            settings.hosted_model,
+            settings.hosted_api_key,
+            translate_model=settings.hosted_translate_model,
+        )
     return AutoJudge(settings)
 
 

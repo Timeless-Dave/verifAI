@@ -18,6 +18,18 @@ from verifai.retrieval.textutil import detect_language, fetch_json
 from verifai.retrieval.types import Passage, RetrievalResult
 
 _API = "https://www.wikidata.org/w/api.php"
+_SPARQL = "https://query.wikidata.org/sparql"
+# Taxon ranks worth naming, broadest last: species up to kingdom.
+_RANKS = {
+    "Q7432": "species",
+    "Q34740": "genus",
+    "Q35409": "family",
+    "Q36602": "order",
+    "Q37517": "class",
+    "Q38348": "phylum",
+    "Q36732": "kingdom",
+}
+_RANK_ORDER = list(_RANKS.values())
 _MAX_ITEMS = 3
 _MAX_VALUES = 4
 _MAX_CHARS = 1600
@@ -77,6 +89,16 @@ PROPERTIES: dict[str, str] = {
     "P175": "performer",
     "P495": "country of origin",
     "P1120": "number of deaths",
+    "P279": "subclass of",
+    "P361": "part of",
+    "P186": "made from material",
+    "P527": "has part",
+    "P35": "head of state",
+    "P6": "head of government",
+    "P37": "official language",
+    "P38": "currency",
+    "P169": "chief executive officer",
+    "P1056": "product or material produced",
     "P26": "spouse",
     "P69": "educated at",
     "P108": "employer",
@@ -177,6 +199,13 @@ class WikidataRetriever:
         failed = 0
         for name in names:
             hits, ok = self._search(name, lang)
+            single = _singular(name)
+            if ok and single:
+                # "Spiders are insects" is about the spider, not a studio
+                # called Spiders. Search both and let the ranking choose.
+                more, _ok = self._search(single, lang)
+                known = {hit["id"] for hit in hits}
+                hits = hits + [hit for hit in more if hit["id"] not in known]
             # "the chemical symbol for gold" is no item. Gold is.
             tail = re.search(r"\b(?:of|for)\s+(?:the\s+)?([a-z][a-z'’-]{2,})$", name)
             if ok and not hits and tail:
@@ -188,7 +217,10 @@ class WikidataRetriever:
         reach = self._sitelinks([str(hit["id"]) for _name, hits in searched for hit in hits])
         ids: list[str] = []
         for name, hits in searched:
-            found = _pick(hits, name, self._claim, reach)
+            # "Bats are blind" capitalises Bats only because it starts the
+            # sentence. Then case says nothing: the bat, not the French village.
+            opening = bool(_singular(name)) and self._claim.lstrip().startswith(name)
+            found = _pick(hits, name, self._claim, reach, also=_singular(name), fold=opening)
             if found and found not in ids:
                 ids.append(found)
         if not ids:
@@ -206,9 +238,39 @@ class WikidataRetriever:
             passage
             for qid in ids
             if qid in entities
-            and (passage := render_item(qid, entities[qid], labels, lang)) is not None
+            and (
+                passage := render_item(
+                    qid, entities[qid], labels, lang, lineage=self._lineage(qid, entities[qid])
+                )
+            )
+            is not None
         ]
         return RetrievalResult(self.name, passages=passages)
+
+    def _lineage(self, qid: str, item: dict[str, Any]) -> str:
+        """Where a living thing sits: "species dolphin; order Cetacea; class mammal".
+
+        A taxon names only its direct parent, so "Dolphins are mammals" needs
+        the whole line up to the kingdom. One query fetches it.
+        """
+        if not _dict(item.get("claims")).get("P171") or not re.fullmatch(r"Q\d+", qid):
+            return ""
+        ranks = " ".join(f"wd:{rank}" for rank in _RANKS)
+        query = (
+            f"SELECT ?rank ?label WHERE {{ wd:{qid} wdt:P171* ?taxon . ?taxon wdt:P105 ?rank . "
+            f"VALUES ?rank {{ {ranks} }} ?taxon rdfs:label ?label . FILTER(LANG(?label) = 'en') }}"
+        )
+        body, _error = fetch_json(
+            self.http, _SPARQL, {"query": query, "format": "json"}, source=self.name
+        )
+        rows = (body or {}).get("results", {}).get("bindings", []) if body else []
+        found: dict[str, str] = {}
+        for row in rows if isinstance(rows, list) else []:
+            rank = str(row.get("rank", {}).get("value", "")).rsplit("/", 1)[-1]
+            label = row.get("label", {}).get("value")
+            if rank in _RANKS and isinstance(label, str):
+                found.setdefault(_RANKS[rank], label)
+        return "; ".join(f"{rank} {found[rank]}" for rank in _RANK_ORDER if rank in found)
 
     def _search(self, name: str, lang: str) -> tuple[list[dict[str, Any]], bool]:
         body, _error = fetch_json(
@@ -287,7 +349,23 @@ def _words(text: str) -> set[str]:
     return set(re.findall(r"[^\W\d_]{4,}", text.casefold()))
 
 
-def _pick(hits: list[dict[str, Any]], name: str, claim: str, reach: dict[str, int]) -> str | None:
+def _singular(name: str) -> str:
+    """ "Spiders" gives "spider". Only one-word plurals, and not "Paris" or "Texas"."""
+    if " " in name or len(name) < 4 or not name.endswith("s") or name.endswith(("ss", "us", "is")):
+        return ""
+    stem = name[:-3] + "y" if name.endswith("ies") else name[:-1]
+    return stem.casefold()
+
+
+def _pick(
+    hits: list[dict[str, Any]],
+    name: str,
+    claim: str,
+    reach: dict[str, int],
+    *,
+    also: str = "",
+    fold: bool = False,
+) -> str | None:
     """The item a name means in this claim.
 
     A description that shares words with the rest of the claim decides first:
@@ -303,8 +381,11 @@ def _pick(hits: list[dict[str, Any]], name: str, claim: str, reach: dict[str, in
     ranked = sorted(
         enumerate(hits),
         key=lambda pair: (
+            not (
+                _exact(pair[1], name, fold=fold)
+                or (bool(also) and _exact(pair[1], also, fold=True))
+            ),
             -len(context & _words(str(pair[1].get("description") or ""))),
-            not _exact(pair[1], name),
             -reach.get(str(pair[1]["id"]), 0),
             pair[0],
         ),
@@ -312,12 +393,22 @@ def _pick(hits: list[dict[str, Any]], name: str, claim: str, reach: dict[str, in
     return str(ranked[0][1]["id"])
 
 
-def _exact(hit: dict[str, Any], name: str) -> bool:
-    """The item is called what the claim wrote, capitals kept, accents not."""
+def _exact(hit: dict[str, Any], name: str, *, fold: bool = False) -> bool:
+    """The item is called what the claim wrote, capitals kept, accents not.
+
+    "Apple Inc." counts for "Apple"; "Brazilian Portuguese" does not count
+    for "Brazil": the name must end at a word boundary.
+    """
     match = hit.get("match")
     written = match.get("text") if isinstance(match, dict) else None
-    want = _plain(name)
-    return any(_plain(str(text)).startswith(want) for text in (hit.get("label"), written) if text)
+    want = _plain(name).casefold() if fold else _plain(name)
+    for text in (hit.get("label"), written):
+        if not text:
+            continue
+        have = _plain(str(text)).casefold() if fold else _plain(str(text))
+        if re.match(rf"{re.escape(want)}(?![^\W_])", have):
+            return True
+    return False
 
 
 def _plain(text: str) -> str:
@@ -358,7 +449,7 @@ def entity_names(claim: str) -> list[str]:
 
 
 def render_item(
-    qid: str, item: dict[str, Any], labels: dict[str, str], lang: str
+    qid: str, item: dict[str, Any], labels: dict[str, str], lang: str, *, lineage: str = ""
 ) -> Passage | None:
     label = _label(item, lang)
     if not label:
@@ -375,6 +466,8 @@ def render_item(
         if values:
             facts.append(f"{name}: {', '.join(values)}")
     head = f"{label} ({description})" if description else label
+    if lineage:
+        facts.insert(0, f"classification: {lineage}")
     body = "; ".join(facts)
     text = f"{head}. {body}." if body else f"{head}."
     return Passage(

@@ -108,6 +108,11 @@ button, .masthead-strap, .masthead-nav, .promises, .site-foot, .evidence .source
 .hero { padding: 40px 0 26px; border-bottom: 1px solid var(--rule); }
 .hero h1 { margin: 0 0 12px; font-size: clamp(32px, 5.4vw, 54px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 700; max-width: 16ch; }
 .lede { margin: 0; max-width: 60ch; color: var(--ink-2); font-size: 19px; }
+.legwork { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px 28px; margin: 20px 0 0; font-size: 15px; color: var(--ink-2); }
+.legwork-label { grid-column: 1 / -1; margin-bottom: 2px; }
+.legwork > span { display: inline-flex; gap: 6px; align-items: center; }
+.legwork .icon { width: 14px; height: 14px; color: var(--true-ink); }
+.legwork-label { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink); }
 .promises { display: grid; grid-template-columns: repeat(3, 1fr); margin: 26px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--rule-soft); }
 .promises li { display: flex; gap: 10px; padding: 12px 14px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.05em; }
 .promises li + li { padding-left: 14px; border-left: 1px solid var(--rule-soft); }
@@ -291,6 +296,7 @@ details.why > p { color: var(--ink-2); font-size: 16px; max-width: 70ch; }
   .topbar-row { justify-content: space-between; }
   .topbar-nav { gap: 12px; }
   .promises { grid-template-columns: 1fr; }
+  .legwork { grid-template-columns: 1fr; }
   .promises li + li { padding-left: 0; border-left: 0; border-top: 1px dotted var(--rule-soft); padding-bottom: 10px; }
   .summary-head { grid-template-columns: 1fr; gap: 16px; }
   .bars { grid-template-columns: 1fr; }

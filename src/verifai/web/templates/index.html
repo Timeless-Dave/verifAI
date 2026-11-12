@@ -1,14 +1,22 @@
 {% extends "base.html" %}
 {% from "_ui.html" import icon %}
-{% block title %}VerifAI · check claims and citations{% endblock %}
+{% block title %}VerifAI · the fact-checking, done for you{% endblock %}
 {% block body %}
 <section class="hero">
-  <h1>Is it true? Is the source real?</h1>
-  <p class="lede">Paste a chatbot answer, an article, or a reference list. VerifAI checks each citation and each claim against live sources and shows you what holds up.</p>
+  <h1>Check it before you share it.</h1>
+  <p class="lede">Checking something properly means a dozen open tabs: Wikipedia, the research databases, what fact-checkers said, every reference looked up. VerifAI does that legwork for you in under a minute, then shows you what holds up and links every source it read.</p>
+  <p class="legwork"><span class="legwork-label">Done for you</span>
+    <span>{{ icon("i-check") }}Searches Wikipedia and Wikidata</span>
+    <span>{{ icon("i-check") }}Reads PubMed and Europe PMC</span>
+    <span>{{ icon("i-check") }}Finds fact-checkers' verdicts</span>
+    <span>{{ icon("i-check") }}Looks up every DOI, PMID, and ISBN</span>
+    <span>{{ icon("i-check") }}Catches retractions</span>
+    <span>{{ icon("i-check") }}Reads claims in other languages</span>
+  </p>
   <ol class="promises">
-    <li><span class="num">01</span><span>Two independent sources before any verdict</span></li>
-    <li><span class="num">02</span><span>Fake, retracted, and mis-cited papers flagged</span></li>
-    <li><span class="num">03</span><span>Every source linked so you can check it yourself</span></li>
+    <li><span class="num">01</span><span>Never takes one source's word: a verdict needs two independent sources that agree</span></li>
+    <li><span class="num">02</span><span>Flags made-up, retracted, and mis-cited papers</span></li>
+    <li><span class="num">03</span><span>Shows its work: every source linked, so you can read it yourself</span></li>
   </ol>
 </section>
 
@@ -17,14 +25,14 @@
 {% endif %}
 
 <form class="check-form" method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator=".check-form" hx-disabled-elt="find button">
-  <label for="claim" class="label">Paste the text to check</label>
-  <textarea id="claim" name="text" rows="9" required placeholder="Paste text with claims, DOIs, links, or a reference list…">{{ text }}</textarea>
+  <label for="claim" class="label">Paste what you want checked</label>
+  <textarea id="claim" name="text" rows="9" required placeholder="A chatbot answer, a forwarded message, a news excerpt, or a reference list…">{{ text }}</textarea>
   <div class="form-row">
     <button type="submit" class="primary"><span class="btn-label">Check it</span><span id="spinner" class="spinner" aria-hidden="true"></span></button>
     <button type="button" class="ghost" data-load-example>Try an example</button>
     <p class="hint-inline"><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd></p>
   </div>
-  <p class="progress-note" aria-live="polite">Checking against live sources. Citations take a second or two; each claim takes a few seconds more.</p>
+  <p class="progress-note" aria-live="polite">Reading the sources for you. Citations take a second or two; each claim takes a few seconds more.</p>
 </form>
 <script id="example-text" type="application/json">{{ example_json | safe }}</script>
 
@@ -39,7 +47,8 @@
     <summary>{{ icon("i-chevron", "icon chevron") }}How it works</summary>
     <ol class="steps">
       <li><strong>Citations.</strong> Each DOI, arXiv id, PMID, ISBN, link, and reference is looked up in Crossref, OpenAlex, DataCite, PubMed, and Open Library. Retractions come from Retraction Watch through Crossref.</li>
-      <li><strong>Claims.</strong> Health claims go to PubMed and Europe PMC. News goes to fact-check reviews, GDELT, and Wikipedia current events. Everything else uses Wikipedia, Wikidata, and pages you pasted.</li>
+      <li><strong>Claims.</strong> Health claims go to PubMed, Europe PMC, Wikipedia, and fact-checkers. News goes to fact-checkers, GDELT, and Wikipedia current events. Everything else uses Wikipedia, Wikidata, fact-checkers, and pages you pasted. A claim in another language is translated so English sources can be searched too, and the translation is shown.</li>
+      <li><strong>Reading.</strong> An AI model reads each passage beside the claim and says whether it supports it, contradicts it, or is not about it. It only judges what was just retrieved; nothing comes from its memory.</li>
       <li><strong>Two sources.</strong> A claim is supported or refuted only when two independent sources agree. The same paper in two indexes counts once, and one website counts once however many pages it returns.</li>
       <li><strong>Keep going if one is down.</strong> A missing source lowers confidence. It never silently becomes the whole verdict.</li>
     </ol>
@@ -50,6 +59,7 @@
       <div><dt><span class="badge tone-good">{{ icon("i-check") }}<span>Verified</span></span></dt><dd>A real record matches the citation.</dd></div>
       <div><dt><span class="badge tone-warning">{{ icon("i-split") }}<span>Partial match</span></span></dt><dd>The work is real, but the title, year, authors, or journal printed beside it are wrong.</dd></div>
       <div><dt><span class="badge tone-critical">{{ icon("i-cross") }}<span>Not found</span></span></dt><dd>No source has it. Often a made-up citation.</dd></div>
+      <div><dt><span class="badge tone-critical">{{ icon("i-cross") }}<span>Wrong paper</span></span></dt><dd>The DOI is real, but it belongs to a different paper than the one named.</dd></div>
       <div><dt><span class="badge tone-critical">{{ icon("i-ban") }}<span>Invalid</span></span></dt><dd>The identifier cannot exist, for example an ISBN that fails its checksum.</dd></div>
       <div><dt><span class="badge tone-serious">{{ icon("i-alert") }}<span>Retracted</span></span></dt><dd>The paper exists but was withdrawn. It cannot support a claim.</dd></div>
       <div><dt><span class="badge tone-neutral">{{ icon("i-cloud") }}<span>Couldn't check</span></span></dt><dd>A source timed out or refused. This is not evidence of a fake.</dd></div>

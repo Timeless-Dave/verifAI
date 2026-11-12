@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # each, and the cheapest per judgment on Workers AI.
     hosted_model: str = "@cf/qwen/qwen3-30b-a3b-fp8"
     hosted_api_key: str = ""
+    # Non-English claims are translated before their sources are searched.
+    # Llama 3.3 70B rendered Yoruba, Igbo, and Hausa test claims, negations
+    # included, where Qwen3 30B and Mistral Small changed their meaning.
+    # Empty means the judge model translates.
+    hosted_translate_model: str = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 
     @property
     def max_body_bytes(self) -> int:

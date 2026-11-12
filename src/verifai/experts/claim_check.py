@@ -9,9 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from rapidfuzz import fuzz
 
 from verifai.corroboration import SourceVote, Stance, corroborate
-from verifai.models.judge import Judge
+from verifai.models.judge import Judge, translate_with
 from verifai.models.parsing import Judgment
-from verifai.retrieval.textutil import detect_language, search_terms_for
+from verifai.retrieval.textutil import detect_language, needs_english, search_terms_for
 from verifai.retrieval.types import Passage, RetrievalResult, Retriever
 from verifai.schemas import EvidenceItem, ExpertResult, ordered_sources, source_label
 
@@ -32,7 +32,29 @@ def check_claim(
     disclaimer: str | None = None,
     note: str | None = None,
 ) -> ExpertResult:
-    outcomes = _retrieve_all(retrievers, claim, workers)
+    # A claim in Yoruba or Japanese finds little in its own Wikipedia and
+    # nothing in English sources. Search and judge an English rendering, and
+    # still search the claim's own Wikipedia edition in its own words.
+    asked = claim
+    english = translate_with(judge, claim) if needs_english(claim) else None
+    if english and english.casefold() != claim.casefold():
+        original = claim
+        claim = english
+        outcomes = _retrieve_all(retrievers, claim, workers)
+        if detect_language(original) != "en":
+            native = [
+                retriever.retrieve(original)
+                for retriever in retrievers
+                if retriever.name == "wikipedia"
+            ]
+            outcomes = _merge_outcomes(outcomes, native)
+        note = " ".join(
+            part
+            for part in (f"Sources were searched with the English translation “{claim}”.", note)
+            if part
+        )
+    else:
+        outcomes = _retrieve_all(retrievers, claim, workers)
     evidence: list[EvidenceItem] = []
     votes: list[SourceVote] = []
     consulted: list[str] = []
@@ -94,7 +116,7 @@ def check_claim(
         sources_consulted=ordered_sources(consulted),
         sources_contributed=ordered_sources(contributed),
         sources_unavailable=ordered_sources(unavailable),
-        subject=claim,
+        subject=asked,
     )
 
 
@@ -325,6 +347,29 @@ def _retrieve_all(
         return [retriever.retrieve(query) for retriever in retrievers]
     with ThreadPoolExecutor(max_workers=min(workers, len(retrievers))) as pool:
         return list(pool.map(_call, retrievers, [query] * len(retrievers)))
+
+
+def _merge_outcomes(
+    outcomes: list[RetrievalResult], extra: list[RetrievalResult]
+) -> list[RetrievalResult]:
+    """Add the native-language passages to the same source's English ones."""
+    merged = list(outcomes)
+    for more in extra:
+        for index, outcome in enumerate(merged):
+            if outcome.source == more.source:
+                seen = {passage.url for passage in outcome.passages}
+                passages = [
+                    *outcome.passages,
+                    *(passage for passage in more.passages if passage.url not in seen),
+                ]
+                merged[index] = RetrievalResult(
+                    outcome.source,
+                    passages=passages,
+                    unavailable=outcome.unavailable and more.unavailable,
+                    error=outcome.error,
+                )
+                break
+    return merged
 
 
 def _call(retriever: Retriever, query: str) -> RetrievalResult:

@@ -1,6 +1,6 @@
 # VerifAI
 
-VerifAI checks whether what you read is backed up by evidence. Paste a paragraph, a chatbot answer, a news excerpt, or a reference list. VerifAI splits it into claims and citations, looks each one up in public sources at that moment, and shows a verdict for each, with the reason and a link to every source it used.
+VerifAI does the fact-checking legwork for you. Checking something properly means a dozen open tabs: Wikipedia, the research databases, what fact-checkers said, and every reference looked up one by one. Paste a paragraph, a chatbot answer, a forwarded message, or a reference list, and VerifAI does that work in under a minute. It splits the text into claims and citations, looks each one up in public sources at that moment, and shows a verdict for each, with the reason and a link to every source it read.
 
 **Use it now, with nothing to install: https://useverifai.vercel.app**
 
@@ -74,7 +74,7 @@ Confidence is how sure VerifAI is of that verdict, from 0 to 100%. It is not the
 
 ## How a check works
 
-1. **Split.** The paste is cleaned: zero-width characters are removed, DOIs broken across lines are rejoined, and look-alike characters are noted. It is then split into claims and citations. A claim's language is detected (English, French, Spanish, German, Italian, Portuguese, Chinese, Japanese, Arabic), so its Wikipedia lookup uses that language's edition.
+1. **Split.** The paste is cleaned: zero-width characters are removed, DOIs broken across lines are rejoined, and look-alike characters are noted. It is then split into claims and citations. A claim that is not in English is translated into English with a separate model (Llama 3.3 70B on the public site), so that English sources can be searched. The claim's own Wikipedia edition is still searched in its own words, and the page shows the translation that was used.
 2. **Route.** Each claim goes to the checker that fits it. A sentence can go to more than one.
 
    | Checker | Sources | Used for |
@@ -84,7 +84,7 @@ Confidence is how sure VerifAI is of that verdict, from 0 to 100%. It is not the
    | News and politics | Google Fact Check, GDELT news articles, Wikipedia current events, linked articles | Elections, governments, current events |
    | Citation | doi.org, Crossref, OpenAlex, DataCite, PubMed, Open Library, a direct fetch, the Internet Archive | DOIs, links, references, arXiv, PMID, PMC, ISBN |
 
-3. **Retrieve.** Each source is asked at check time. Nothing comes from a language model's memory. Wikipedia opens the article the claim names, as well as its search results. Wikidata picks the item that fits the claim: the river Nile, not the band named Nile; Michael I. Jordan the computer scientist, not the basketball player. It then shows the item's key facts: dates, places, creators, heights, winners, and so on.
+3. **Retrieve.** Each source is asked at check time. Nothing comes from a language model's memory. Wikipedia opens the article the claim names, as well as its search results. Wikidata picks the item that fits the claim: the river Nile, not the band named Nile; Michael I. Jordan the computer scientist, not the basketball player; the bat, not the French village called Bats. It then shows the item's key facts: dates, places, creators, heights, winners, heads of state, official languages, what a thing is made of, and, for a living thing, its whole classification, so "Dolphins are mammals" can be checked.
 4. **Judge.** An AI model reads each retrieved passage beside the claim and says whether that passage supports it, contradicts it, or is not about it, with one line of reason. It judges only the text in front of it.
    - The model is told to ignore any instructions inside the claim or the evidence.
    - It treats a different person with the same name as not about the claim.
@@ -324,7 +324,7 @@ See `CONTRIBUTING.md` before changing how verdicts are reached, and `SECURITY.md
 ## Known limitations
 
 - **Many true claims stay unverified.** A verdict needs two independent sources. For general knowledge, often only Wikipedia has a usable passage, and Wikidata stores structured facts (dates, places, creators), not statements like "bats are not blind". This is the price of rarely being wrong.
-- **Chinese and Japanese claims rarely find sources.** They are searched on the matching Wikipedia edition, but whole-sentence searches there often return nothing. French, Spanish, German, Italian, Portuguese, and Arabic work better.
+- **Other languages depend on a translation.** A claim that is not in English is checked through its English translation, which the page shows. A wrong translation can lead to a wrong verdict. In testing, the translation model rendered Yoruba, Igbo, Hausa, Swahili, Japanese, Chinese, Russian, French, and German claims correctly, but rare languages and slang are riskier. Read the translation shown on the card.
 - **The AI judge can misread a passage.** The two-source rule limits the damage: one misread passage cannot decide a verdict.
 - **Wikipedia search can still pick a side article.** For example, it might pick an article about a disease's history when the claim is about its cause. Opening the article the claim names reduces this but does not remove it.
 - **A verified citation exists, but VerifAI does not read the paper.** It may still be irrelevant to the claim or misquoted.
