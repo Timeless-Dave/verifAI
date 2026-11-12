@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from verifai.experts.citation.providers.base import Record
@@ -23,6 +24,12 @@ def record_from_crossref_like(source: str, payload: object) -> Record | None:
     url = _first_str(payload.get("URL") or payload.get("url"))
     if url is None and doi:
         url = f"https://doi.org/{doi}"
+    notices, retracted = _update_notices(payload.get("updated-by"))
+    if title and re.match(r"\s*(?:RETRACTED|WITHDRAWN)\s*[:\-–]\s*", title, flags=re.IGNORECASE):
+        retracted = True
+        if not notices:
+            notices.append("The record's title marks it as retracted.")
+        title = re.sub(r"^\s*(?:RETRACTED|WITHDRAWN)\s*[:\-–]\s*", "", title, flags=re.IGNORECASE)
     return Record(
         source=source,
         title=title,
@@ -34,7 +41,52 @@ def record_from_crossref_like(source: str, payload: object) -> Record | None:
         doi=canonical_doi(doi),
         url=url,
         record_id=canonical_doi(doi),
+        notices=notices,
+        retracted=retracted,
     )
+
+
+_NOTICE_LABELS = {
+    "retraction": "Retracted",
+    "withdrawal": "Withdrawn",
+    "removal": "Removed",
+    "expression_of_concern": "Expression of concern",
+}
+_RETRACTING = {"retraction", "withdrawal", "removal"}
+
+
+def _update_notices(value: object) -> tuple[list[str], bool]:
+    """Crossref ``updated-by``. Retraction Watch notices arrive here too."""
+    notices: list[str] = []
+    retracted = False
+    if not isinstance(value, list):
+        return notices, retracted
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("type") or "").strip().lower().replace("-", "_")
+        if kind not in _NOTICE_LABELS:
+            continue
+        retracted = retracted or kind in _RETRACTING
+        parts = (
+            (item.get("updated") or {}).get("date-parts")
+            if isinstance(item.get("updated"), dict)
+            else None
+        )
+        year = (
+            parts[0][0]
+            if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0]
+            else None
+        )
+        notice = _NOTICE_LABELS[kind]
+        if isinstance(year, int):
+            notice += f" in {year}"
+        if isinstance(item.get("DOI"), str):
+            notice += f" (notice DOI {item['DOI']})"
+        if item.get("source") == "retraction-watch":
+            notice += ", per Retraction Watch"
+        notices.append(notice + ".")
+    return notices, retracted
 
 
 def record_from_openalex(work: object) -> Record | None:

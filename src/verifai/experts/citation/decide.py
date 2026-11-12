@@ -13,7 +13,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verifai.experts.citation.extract import ExtractedCitation
-from verifai.experts.citation.match import Assessment, Query, assess, title_scores
+from verifai.experts.citation.match import (
+    Assessment,
+    Query,
+    assess,
+    compare_venue,
+    compare_year,
+    title_scores,
+)
 from verifai.experts.citation.providers.base import ProviderOutcome, Record, UrlCheck, WaybackHit
 from verifai.experts.citation.textnorm import canonical_doi, format_people
 from verifai.schemas import (
@@ -42,6 +49,10 @@ CONF_DOI_PARTIAL = 0.80
 CONF_DOI_NOT_FOUND = 0.91
 CONF_DOI_NOT_FOUND_CONFLICT = 0.72
 CONF_DOI_NOT_FOUND_PARTIAL_OUTAGE = 0.58
+
+CONF_ISBN_FOUND = 0.85
+CONF_ISBN_MISSING = 0.40
+CONF_ISBN_BAD_CHECKSUM = 0.95
 
 CONF_URL_LIVE = 0.92
 CONF_URL_ARCHIVED = 0.74
@@ -112,6 +123,10 @@ def decide_reference(
         outcomes=outcomes,
         notes=notes,
     )
+    retraction = _retraction([best.record, *[item.record for item in supporters]])
+    if retraction and status != CitationStatus.NOT_FOUND:
+        status = CitationStatus.RETRACTED
+        explanation = f"{explanation} {retraction}"
     evidence_records = [best.record, *[item.record for item in supporters]]
     return _result(
         citation,
@@ -179,6 +194,13 @@ def decide_doi(citation: ExtractedCitation, outcomes: list[ProviderOutcome]) -> 
         elif assessment.status != CitationStatus.VERIFIED:
             status = CitationStatus.PARTIALLY_MATCHES
             mismatches.extend(assessment.mismatches)
+    elif citation.year or citation.venue:
+        # No usable title, but a year or journal printed beside the DOI can
+        # still be wrong. "Science, 2016" next to the Nature 2015 DOI is.
+        details = _detail_mismatches(citation, primary)
+        if details:
+            status = CitationStatus.PARTIALLY_MATCHES
+            mismatches.extend(details)
     for other in records:
         if other is primary or not other.title or not primary.title:
             continue
@@ -209,6 +231,10 @@ def decide_doi(citation: ExtractedCitation, outcomes: list[ProviderOutcome]) -> 
         outcomes=outcomes,
         status=status,
     )
+    retraction = _retraction(records)
+    if retraction:
+        status = CitationStatus.RETRACTED
+        explanation = f"{explanation} {retraction}"
     return _result(
         citation,
         status=status,
@@ -222,6 +248,100 @@ def decide_doi(citation: ExtractedCitation, outcomes: list[ProviderOutcome]) -> 
         links=_links(records),
         matched=primary,
     )
+
+
+def decide_isbn(citation: ExtractedCitation, outcome: ProviderOutcome | None) -> CitationResult:
+    """``outcome`` is None when the checksum failed and nothing was asked."""
+    isbn = citation.isbn or ""
+    if outcome is None:
+        return _result(
+            citation,
+            status=CitationStatus.NOT_FOUND,
+            confidence=CONF_ISBN_BAD_CHECKSUM,
+            explanation=(
+                f"ISBN {isbn} fails the ISBN checksum, so no book can have this number. "
+                "It was mistyped or made up."
+            ),
+            consulted=[],
+            contributed=[],
+            unavailable=[],
+        )
+    consulted = [outcome.source]
+    if outcome.unavailable:
+        return _result(
+            citation,
+            status=CitationStatus.UNREACHABLE,
+            confidence=CONF_UNREACHABLE,
+            explanation=f"ISBN {isbn} is valid, but Open Library did not answer.",
+            consulted=consulted,
+            contributed=[],
+            unavailable=consulted,
+        )
+    if not outcome.records:
+        return _result(
+            citation,
+            status=CitationStatus.UNREACHABLE,
+            confidence=CONF_ISBN_MISSING,
+            explanation=(
+                f"ISBN {isbn} is a valid number, but Open Library has no book with it. "
+                "Its catalogue is incomplete, so this is not evidence that the book is fake."
+            ),
+            consulted=consulted,
+            contributed=consulted,
+            unavailable=[],
+        )
+    record = outcome.records[0]
+    return _result(
+        citation,
+        status=CitationStatus.VERIFIED,
+        confidence=CONF_ISBN_FOUND,
+        explanation=(
+            f"ISBN {isbn} belongs to “{record.title}”"
+            + (f" ({record.venue}, {record.year})" if record.venue and record.year else "")
+            + " in Open Library. Check that this is the book the text names."
+        ),
+        consulted=consulted,
+        contributed=consulted,
+        unavailable=[],
+        evidence=_evidence([record], None),
+        links=_links([record]),
+        matched=record,
+    )
+
+
+def _retraction(records: list[Record]) -> str:
+    notices = [notice for record in records if record.retracted for notice in record.notices]
+    if not any(record.retracted for record in records):
+        return ""
+    detail = " ".join(_unique(notices))
+    return (
+        f"This work has been retracted. {detail} It exists, but it cannot support a claim."
+    ).replace("  ", " ")
+
+
+def _detail_mismatches(citation: ExtractedCitation, record: Record) -> list[str]:
+    query = Query(
+        title=None,
+        surnames=list(citation.surnames),
+        year=citation.year,
+        venue=citation.venue,
+        et_al=citation.et_al,
+    )
+    found: list[str] = []
+    year_status = compare_year(query, record)
+    if year_status == "mismatch":
+        found.append(
+            f"Year mismatch: the text says {citation.year}, the record says {record.year}."
+        )
+    elif year_status == "off_by_one":
+        found.append(
+            f"Year is off by one: the text says {citation.year}, the record says {record.year}."
+        )
+    if compare_venue(citation.venue, record.venue) == "mismatch":
+        found.append(
+            f"Venue mismatch: the text says {citation.venue}, the record says {record.venue}."
+        )
+    return found
 
 
 def decide_url(

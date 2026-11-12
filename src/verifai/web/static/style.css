@@ -316,6 +316,7 @@ code {
 
 .stamp-verified { color: var(--green); background: var(--green-bg); }
 .stamp-partially_matches { color: var(--amber); background: var(--amber-bg); }
+.stamp-retracted { color: var(--red); background: var(--red-bg); }
 .stamp-not_found { color: var(--red); background: var(--red-bg); }
 .stamp-unreachable { color: var(--slate); background: var(--slate-bg); }
 

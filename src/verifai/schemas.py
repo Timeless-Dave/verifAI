@@ -55,6 +55,7 @@ class CitationStatus(str, Enum):
     PARTIALLY_MATCHES = "partially_matches"
     NOT_FOUND = "not_found"
     UNREACHABLE = "unreachable"
+    RETRACTED = "retracted"
 
 
 VERDICT_LABELS = {
@@ -69,6 +70,7 @@ STATUS_LABELS = {
     CitationStatus.PARTIALLY_MATCHES: "Partially matches",
     CitationStatus.NOT_FOUND: "Not found",
     CitationStatus.UNREACHABLE: "Unreachable",
+    CitationStatus.RETRACTED: "Retracted",
 }
 
 
@@ -111,7 +113,7 @@ class CitationResult(BaseModel):
     """Status of a single extracted citation."""
 
     raw: str
-    kind: Literal["doi", "url", "reference"]
+    kind: Literal["doi", "url", "reference", "isbn"]
     status: CitationStatus
     confidence: float = Field(ge=0, le=1)
     explanation: str
@@ -207,3 +209,5 @@ class CheckResponse(BaseModel):
     verdict: Verdict | None = None
     confidence: float | None = None
     explanation: str = ""
+    claims_found: int = 0
+    claims_checked: int = 0

@@ -21,13 +21,19 @@ from typing import cast
 
 from verifai.config import Settings
 from verifai.evidence.base import EvidenceProvider, EvidenceRegistry
-from verifai.experts.citation.decide import decide_doi, decide_reference, decide_url
-from verifai.experts.citation.extract import ExtractedCitation, extract_citations
+from verifai.experts.citation.decide import decide_doi, decide_isbn, decide_reference, decide_url
+from verifai.experts.citation.extract import (
+    ExtractedCitation,
+    dangling_markers,
+    extract_citations,
+    isbn_valid,
+)
 from verifai.experts.citation.providers.base import ProviderOutcome
 from verifai.experts.citation.providers.crossref import CrossrefProvider
 from verifai.experts.citation.providers.datacite import DataCiteProvider
 from verifai.experts.citation.providers.doi_org import DoiOrgProvider
 from verifai.experts.citation.providers.openalex import OpenAlexProvider
+from verifai.experts.citation.providers.openlibrary import OpenLibraryProvider
 from verifai.experts.citation.providers.semantic_scholar import SemanticScholarProvider
 from verifai.experts.citation.providers.url_check import UrlLivenessProvider
 from verifai.experts.citation.providers.wayback import WaybackProvider
@@ -78,10 +84,11 @@ class CitationExpert:
 
     def check(self, text: str) -> ExpertResult:
         extracted = extract_citations(text or "")
+        dangling = dangling_markers(text or "")
         truncated = len(extracted) > MAX_CITATIONS
         extracted = extracted[:MAX_CITATIONS]
         if not extracted:
-            return _summarize([], truncated=False)
+            return _summarize([], truncated=False, dangling=dangling)
         workers = min(self.max_concurrency, len(extracted))
         if workers == 1:
             checked = [self._check_one(item) for item in extracted]
@@ -95,13 +102,17 @@ class CitationExpert:
                     item.kind,
                     ", ".join(item.sources_unavailable),
                 )
-        return _summarize(checked, truncated=truncated)
+        return _summarize(checked, truncated=truncated, dangling=dangling)
 
     def _check_one(self, citation: ExtractedCitation) -> CitationResult:
         if citation.kind == "doi" and citation.doi:
             return self._check_doi(citation)
         if citation.kind == "url" and citation.url:
             return self._check_url(citation)
+        if citation.kind == "isbn" and citation.isbn:
+            if not isbn_valid(citation.isbn):
+                return decide_isbn(citation, None)
+            return decide_isbn(citation, self._openlibrary().lookup_isbn(citation.isbn))
         return self._check_reference(citation)
 
     def _check_doi(self, citation: ExtractedCitation) -> CitationResult:
@@ -176,6 +187,9 @@ class CitationExpert:
     def _wayback(self) -> WaybackProvider:
         return cast("WaybackProvider", self._providers["wayback"])
 
+    def _openlibrary(self) -> OpenLibraryProvider:
+        return cast("OpenLibraryProvider", self._providers["openlibrary"])
+
     def _scholar(self) -> SemanticScholarProvider | None:
         provider = self._providers.get("semantic_scholar")
         if provider is None:
@@ -191,13 +205,23 @@ def build_citation_expert(http: PoliteHttp, settings: Settings) -> CitationExper
         OpenAlexProvider(http, mailto=settings.mailto, api_key=settings.openalex_api_key),
         UrlLivenessProvider(http),
         WaybackProvider(http),
+        OpenLibraryProvider(http),
     ]
     if settings.semantic_scholar_api_key:
         providers.append(SemanticScholarProvider(http, api_key=settings.semantic_scholar_api_key))
     return CitationExpert(providers, max_concurrency=settings.max_concurrency)
 
 
-def _summarize(citations: list[CitationResult], *, truncated: bool) -> ExpertResult:
+def _summarize(
+    citations: list[CitationResult], *, truncated: bool, dangling: list[str] | None = None
+) -> ExpertResult:
+    dangling_note = ""
+    if dangling:
+        marks = ", ".join(dangling)
+        dangling_note = (
+            f" The text points to {marks}, but no matching numbered reference appears in it, "
+            "so there is nothing to check."
+        )
     if not citations:
         return ExpertResult(
             expert="citation",
@@ -209,7 +233,8 @@ def _summarize(citations: list[CitationResult], *, truncated: bool) -> ExpertRes
                 "A bare author-year mention such as “(Smith et al., 2021)” is skipped, "
                 "because it is not specific enough to search without calling a real paper fabricated. "
                 "No providers were queried."
-            ),
+            )
+            + dangling_note,
             evidence=[],
             sources_consulted=[],
             sources_contributed=[],
@@ -226,9 +251,12 @@ def _summarize(citations: list[CitationResult], *, truncated: bool) -> ExpertRes
             f"{counts[CitationStatus.VERIFIED]} verified, "
             f"{counts[CitationStatus.PARTIALLY_MATCHES]} partially matching, "
             f"{counts[CitationStatus.NOT_FOUND]} not found, "
+            f"{counts[CitationStatus.RETRACTED]} retracted, "
             f"{counts[CitationStatus.UNREACHABLE]} unreachable."
         )
     ]
+    if dangling_note:
+        pieces.append(dangling_note.strip())
     if truncated:
         pieces.append(f"Only the first {MAX_CITATIONS} citations were checked.")
     pieces.append(lead)
@@ -273,11 +301,15 @@ def _verdict(counts: Counter[CitationStatus], total: int) -> tuple[Verdict, str]
             Verdict.UNVERIFIABLE,
             "None of the checks could be completed because the sources did not answer.",
         )
+    if counts[CitationStatus.RETRACTED] == total:
+        return Verdict.UNSUPPORTED, "Every citation points to a retracted work."
     if counts[CitationStatus.NOT_FOUND]:
         return (
             Verdict.MIXED,
             "At least one citation looks fabricated or could not be found.",
         )
+    if counts[CitationStatus.RETRACTED]:
+        return Verdict.MIXED, "At least one citation points to a retracted work."
     return (
         Verdict.MIXED,
         "Some citations only partially matched, or could not be reached.",

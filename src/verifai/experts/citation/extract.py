@@ -13,11 +13,17 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from verifai.experts.citation.textnorm import word_count
 
-_DOI_RE = re.compile(r"\b(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+)", re.IGNORECASE)
+_DOI_RE = re.compile(r"\b(10\.\d{4,9}/[-._;()/:%A-Za-z0-9]+)", re.IGNORECASE)
+# New-style arXiv ids. arXiv registers each one with DataCite as 10.48550/arXiv.<id>.
+_ARXIV_RE = re.compile(
+    r"(?:\barXiv:\s*|\barxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?",
+    re.IGNORECASE,
+)
+_ISBN_RE = re.compile(r"\bISBN(?:-1[03])?:?\s*((?:97[89][-\s]?)?(?:\d[-\s]?){9}[\dXx])\b")
 _URL_RE = re.compile(r"https?://[^\s<>\"'\]\[]+", re.IGNORECASE)
 _YEAR_PAREN_RE = re.compile(r"\(((?:19|20)\d{2})\)\.\s+")
 _NARRATIVE_RE = re.compile(
@@ -110,6 +116,7 @@ class ExtractedCitation:
     year: int | None = None
     venue: str | None = None
     et_al: bool = False
+    isbn: str | None = None
 
 
 def extract_citations(text: str) -> list[ExtractedCitation]:
@@ -118,8 +125,12 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
     normalized = _normalize(text)
     found: list[ExtractedCitation] = []
 
-    for match in _DOI_RE.finditer(normalized):
-        doi = clean_doi(match.group(1))
+    dois = [(match, clean_doi(match.group(1))) for match in _DOI_RE.finditer(normalized)]
+    dois += [
+        (match, f"10.48550/arXiv.{match.group(1)}") for match in _ARXIV_RE.finditer(normalized)
+    ]
+    dois.sort(key=lambda pair: pair[0].start())
+    for match, doi in dois:
         if not _doi_ok(doi):
             continue
         line_start, line_end = _line_bounds(normalized, match.start(), match.end())
@@ -128,7 +139,9 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         found.append(
             ExtractedCitation(
                 kind="doi",
-                raw=_clip(raw_line or doi),
+                raw=_clip(
+                    match.group(0) if doi.startswith("10.48550/arXiv.") else (raw_line or doi)
+                ),
                 start=line_start,
                 end=line_end,
                 doi=doi,
@@ -140,6 +153,8 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
             )
         )
 
+    # A line that holds a DOI or a reference owns the URLs on it. URLs do not
+    # own their line, so two links in one sentence are both checked.
     occupied = [(item.start, item.end) for item in found]
     for reference in _find_references(normalized):
         if _overlaps(reference.start, reference.end, occupied):
@@ -147,16 +162,23 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         found.append(reference)
         occupied.append((reference.start, reference.end))
 
+    for match in _ISBN_RE.finditer(normalized):
+        isbn = re.sub(r"[-\s]", "", match.group(1)).upper()
+        found.append(
+            ExtractedCitation(
+                kind="isbn", raw=match.group(0), start=match.start(), end=match.end(), isbn=isbn
+            )
+        )
+
+    url_spans: list[tuple[int, int]] = []
     for match in _URL_RE.finditer(normalized):
         url = clean_url(match.group(0))
-        if not url or _is_doi_url(url):
+        if not url or _is_doi_url(url) or _ARXIV_RE.search(url):
             continue
-        if _overlaps(match.start(), match.end(), occupied):
+        if _overlaps(match.start(), match.end(), occupied + url_spans):
             continue
         line_start, line_end = _line_bounds(normalized, match.start(), match.end())
-        if _overlaps(line_start, line_end, occupied) or _overlaps(
-            match.start(), match.end(), occupied
-        ):
+        if _overlaps(line_start, line_end, occupied):
             continue
         # A URL sitting on a line we already accepted as a reference or DOI
         # belongs to that citation. Compare against line spans we stored.
@@ -165,7 +187,7 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         found.append(
             ExtractedCitation(kind="url", raw=url, start=match.start(), end=match.end(), url=url)
         )
-        occupied.append((match.start(), match.end()))
+        url_spans.append((match.start(), match.end()))
 
     found.sort(key=lambda item: (item.start, item.end))
     return _dedupe(found)
@@ -174,13 +196,31 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
 def clean_doi(raw: str) -> str:
     doi = raw.strip()
     doi = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", doi, flags=re.IGNORECASE)
-    while doi and doi[-1] in ".,;:":
-        doi = doi[:-1]
-    if doi.endswith(")") and doi.count("(") < doi.count(")"):
-        doi = doi[:-1]
-    if doi.endswith("]") and doi.count("[") < doi.count("]"):
-        doi = doi[:-1]
+    if "%" in doi:
+        doi = unquote(doi)  # 10.1016/S0140-6736%2897%2911096-0 is (97)11096-0
+    # "…-2.)" ends with a period inside a closing parenthesis. Strip until stable.
+    previous = None
+    while doi != previous:
+        previous = doi
+        doi = doi.rstrip(".,;:")
+        if doi.endswith(")") and doi.count("(") < doi.count(")"):
+            doi = doi[:-1]
+        if doi.endswith("]") and doi.count("[") < doi.count("]"):
+            doi = doi[:-1]
     return doi
+
+
+def isbn_valid(isbn: str) -> bool:
+    """ISBN-10 or ISBN-13 checksum. A number that fails it cannot be a real ISBN."""
+    if re.fullmatch(r"\d{9}[\dX]", isbn):
+        total = sum(
+            (10 - index) * (10 if char == "X" else int(char)) for index, char in enumerate(isbn)
+        )
+        return total % 11 == 0
+    if re.fullmatch(r"97[89]\d{10}", isbn):
+        total = sum(int(char) * (1 if index % 2 == 0 else 3) for index, char in enumerate(isbn))
+        return total % 10 == 0
+    return False
 
 
 def clean_url(raw: str) -> str:
@@ -270,7 +310,7 @@ def _parse_bibliographic(line: str) -> dict[str, Any]:
     if match:
         head = _author_segment(cleaned[: match.start()])
         surnames, et_al = _surnames(head)
-        title, venue = _split_title_venue(cleaned[match.end() :])
+        title, venue = _split_title_venue(cleaned[match.end() :], min_words=2)
         if title and (surnames or et_al):
             return {
                 "title": title,
@@ -337,7 +377,7 @@ def _surnames(text: str) -> tuple[list[str], bool]:
     return names, et_al
 
 
-def _split_title_venue(rest: str) -> tuple[str | None, str | None]:
+def _split_title_venue(rest: str, *, min_words: int = 3) -> tuple[str | None, str | None]:
     rest = rest.lstrip()
     quoted = re.match(r"[“\"]([^”\"\n]{10,300})[”\"]\.?\s*(.*)$", rest)
     if quoted:
@@ -349,7 +389,9 @@ def _split_title_venue(rest: str) -> tuple[str | None, str | None]:
             return None, None
         title = matched.group(1).strip(" \"“”'")
         tail = rest[matched.end() :]
-    if word_count(title) < 3 or len(title) < 12:
+    # A free-text search needs three words to be specific. With a DOI the
+    # record is already known, so "Deep learning" is enough to compare.
+    if word_count(title) < min_words or len(title) < (12 if min_words >= 3 else 6):
         return None, None
     tail = tail.split("\n", 1)[0]
     tail = _URL_RE.sub(" ", tail)
@@ -392,6 +434,8 @@ def _dedupe(items: list[ExtractedCitation]) -> list[ExtractedCitation]:
             key = ("doi", item.doi.lower())
         elif item.kind == "url" and item.url:
             key = ("url", item.url.lower().rstrip("/"))
+        elif item.kind == "isbn" and item.isbn:
+            key = ("isbn", item.isbn)
         else:
             folded = re.sub(r"\W+", " ", (item.title or "").casefold()).strip()
             key = ("ref", folded, item.year or 0)
@@ -443,3 +487,22 @@ def _clip(value: str, limit: int = 500) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 1].rstrip() + "…"
+
+
+_MARKER_RE = re.compile(r"\[(\d{1,3})\]")
+
+
+def dangling_markers(text: str) -> list[str]:
+    """Numbered markers such as "[12]" with no "[12] …" reference line to match."""
+    entries = set(re.findall(r"(?m)^\s*\[(\d{1,3})\]\s+\S", text or ""))
+    found: list[str] = []
+    for match in _MARKER_RE.finditer(text or ""):
+        line_start = text.rfind("\n", 0, match.start()) + 1
+        if not text[line_start : match.start()].strip():
+            continue  # this is a reference-list entry, not a pointer
+        if match.group(1) in entries:
+            continue
+        label = f"[{match.group(1)}]"
+        if label not in found:
+            found.append(label)
+    return found

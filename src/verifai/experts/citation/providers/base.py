@@ -17,6 +17,9 @@ class Record:
     doi: str | None
     url: str | None
     record_id: str | None = None
+    # Retraction, withdrawal, or expression-of-concern notices, newest last.
+    notices: list[str] = field(default_factory=list)
+    retracted: bool = False
 
 
 @dataclass
