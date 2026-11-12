@@ -27,6 +27,10 @@ def make_settings(**overrides: Any) -> Settings:
         "google_factcheck_api_key": None,
         "model_backend": "none",
         "nli_enabled": False,
+        # A developer .env may set public limits. Tests start from none.
+        "rate_limit_per_minute": 0,
+        "rate_limit_per_hour": 0,
+        "max_concurrent_checks": 4,
     }
     values.update(overrides)
     return Settings.model_validate(values)
