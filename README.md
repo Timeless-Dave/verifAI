@@ -233,7 +233,7 @@ Matching uses RapidFuzz on normalized titles (case, accents, and punctuation fol
 | `VERIFAI_LLAMACPP_BASE_URL`, `VERIFAI_LLAMACPP_MODEL` | `http://127.0.0.1:8080/v1`, `qwen3.5-9b` | llama.cpp server. |
 | `VERIFAI_NLI_MODEL` | `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` | Entailment model. MiniCheck-style ids are accepted. |
 | `VERIFAI_NLI_ENABLED` | `true` | When false, `auto` skips NLI even if `transformers` is installed. |
-| `VERIFAI_MAX_CLAIMS` | `5` | How many extracted claims are checked per paste. |
+| `VERIFAI_MAX_CLAIMS` | `8` | How many extracted claims are checked per paste. The verdict says when more were found than checked. |
 | `VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR` | `0`, `0` | Checks allowed per client address. `0` is off. Turn both on for a public link. |
 | `VERIFAI_MAX_CONCURRENT_CHECKS`, `VERIFAI_CHECK_QUEUE_SECONDS` | `4`, `20` | Checks that run at once, and how long another waits before a 503. |
 | `VERIFAI_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxies whose `X-Forwarded-For` is trusted. See `docs/deploy.md`. |

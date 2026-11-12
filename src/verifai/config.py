@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     llamacpp_model: str = "qwen3.5-9b"
     nli_model: str = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
     nli_enabled: bool = True
-    max_claims: int = Field(default=5, ge=1, le=20)
+    max_claims: int = Field(default=8, ge=1, le=20)
     # Public deployments. 0 turns a rate limit off, which suits a local install.
     rate_limit_per_minute: int = Field(default=0, ge=0, le=10_000)
     rate_limit_per_hour: int = Field(default=0, ge=0, le=100_000)

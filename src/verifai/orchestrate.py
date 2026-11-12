@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verifai.claims import extract_claims, only_links, without_references
+from verifai.claims import find_claims, only_links, without_references
 from verifai.corroboration import SourceVote, Stance, corroborate
 from verifai.experts.base import Expert
 from verifai.experts.claim_check import NOT_MEDICAL_ADVICE
@@ -19,12 +19,16 @@ class CheckBundle:
     verdict: Verdict
     confidence: float
     explanation: str
+    claims_found: int = 0
+    claims_checked: int = 0
 
 
 def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
     results = [expert.check(text) for expert in router.select(text) if expert.name == "citation"]
     combined: list[CombinedClaim] = []
-    for claim in _subjects(text, limit=limit):
+    subjects = _subjects(text)
+    checked = subjects[:limit]
+    for claim in checked:
         experts = [expert for expert in router.select(claim) if expert.name != "citation"]
         claim_results = [_check(expert, claim) for expert in experts]
         results.extend(result for result in claim_results if result is not None)
@@ -32,7 +36,20 @@ def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
         if present:
             combined.append(combine_claim(claim, present))
     verdict, confidence, explanation = rollup(combined, results)
-    return CheckBundle(results, combined, verdict, confidence, explanation)
+    if len(subjects) > len(checked):
+        explanation = (
+            f"{explanation} Only the first {len(checked)} of {len(subjects)} claims found were "
+            "checked. The rest were not looked at, so paste fewer claims at a time to check them."
+        )
+    return CheckBundle(
+        results,
+        combined,
+        verdict,
+        confidence,
+        explanation,
+        claims_found=len(subjects),
+        claims_checked=len(checked),
+    )
 
 
 def combine_claim(claim: str, results: list[ExpertResult]) -> CombinedClaim:
@@ -67,6 +84,33 @@ def combine_claim(claim: str, results: list[ExpertResult]) -> CombinedClaim:
 def rollup(
     combined: list[CombinedClaim], results: list[ExpertResult]
 ) -> tuple[Verdict, float, str]:
+    """One verdict for the paste. Citations count beside the claims.
+
+    An unverified side has no say. A paste whose claims are unverified but
+    whose citations include a fabricated one is mixed, not unverified.
+    """
+    claim_side = _rollup_claims(combined, results)
+    citation = next(
+        (result for result in results if result.expert == "citation" and result.citations), None
+    )
+    if not combined or citation is None:
+        return claim_side
+    claim_verdict, claim_confidence, claim_text = claim_side
+    cited = f"Citations: {citation.explanation.split('. ')[0].rstrip('.')}."
+    if citation.verdict is Verdict.UNVERIFIABLE or citation.verdict is claim_verdict:
+        return claim_verdict, claim_confidence, f"Claims: {claim_text} {cited}"
+    if claim_verdict is Verdict.UNVERIFIABLE:
+        return citation.verdict, citation.confidence, f"Claims: {claim_text} {cited}"
+    return (
+        Verdict.MIXED,
+        min(claim_confidence, citation.confidence),
+        f"Claims: {claim_text} {cited} The claims and the citations do not agree.",
+    )
+
+
+def _rollup_claims(
+    combined: list[CombinedClaim], results: list[ExpertResult]
+) -> tuple[Verdict, float, str]:
     if len(combined) == 1:
         claim = combined[0]
         return claim.verdict, claim.confidence, claim.explanation
@@ -82,8 +126,8 @@ def rollup(
     )
 
 
-def _subjects(text: str, *, limit: int) -> list[str]:
-    claims = extract_claims(text, limit=limit)
+def _subjects(text: str) -> list[str]:
+    claims = find_claims(text)
     if claims:
         return claims
     cleaned = " ".join(without_references(text).split())

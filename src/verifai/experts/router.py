@@ -21,7 +21,8 @@ _HEALTH = re.compile(
     r"placebos?|doses?|drugs?|medications?|viruses?|covid|diabetes|cholesterol|"
     r"supplements?|meta-analys\w*|systematic reviews?|patients?|diagnos\w*|"
     r"therap\w*|mortality|side effects?|infections?|antibiotics?|"
-    r"blood pressure|heart disease|tumou?rs?)\b",
+    r"blood pressure|heart disease|tumou?rs?|vitamins?|common cold|colds|flu|influenza|"
+    r"immun\w*|megadoses?|smoking|cigarettes?|autism|nutrition|obesity)\b",
     re.IGNORECASE,
 )
 _NEWS = re.compile(

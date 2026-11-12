@@ -109,6 +109,8 @@ def build_web_router() -> APIRouter:
             verdict=bundle.verdict,
             confidence=bundle.confidence,
             explanation=bundle.explanation,
+            claims_found=bundle.claims_found,
+            claims_checked=bundle.claims_checked,
         )
 
     @router.get("/health")
