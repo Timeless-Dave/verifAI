@@ -100,7 +100,12 @@
       notice("The check could not finish (error " + status + "). Try again in a moment.");
     }
   });
-  document.body.addEventListener("htmx:sendError", function () {
+  document.body.addEventListener("htmx:sendError", function (event) {
+    var form = event.detail.elt && event.detail.elt.closest ? event.detail.elt.closest("[data-more]") : null;
+    if (form) {
+      pauseBatch(form, "Paused: VerifAI could not be reached. Check your connection.");
+      return;
+    }
     notice("Could not reach VerifAI. Check your connection and try again.");
   });
   document.body.addEventListener("htmx:afterSwap", function (event) {

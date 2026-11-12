@@ -30,7 +30,7 @@
     {% if view.citation_bar %}{{ segbar(view.citation_bar) }}{% endif %}
   </div>
   {% if view.unchecked_pointers %}
-  <p class="aside">{{ icon("i-alert") }}<span><strong>Pointers with nothing to look up:</strong> {{ view.unchecked_pointers|join(", ") }}.</span></p>
+  <p class="aside">{{ icon("i-alert") }}<span><strong>Pointers with nothing to look up:</strong> {{ view.unchecked_pointers|join(", ")|trim(".") }}.</span></p>
   {% endif %}
   {% if view.ignored %}
   <details class="aside-list">
