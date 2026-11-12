@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from verifai.corroboration import Stance
 from verifai.http import PoliteHttp
 from verifai.retrieval.textutil import detect_language, fetch_json, stance_from_rating
 from verifai.retrieval.types import Passage, RetrievalResult
@@ -70,7 +71,12 @@ def _reviews(claim: dict[str, Any]) -> list[Passage]:
         title = str(review.get("title") or claim_text or "Fact check")
         url = review.get("url")
         who = speaker or claimant or "a fact checker"
-        text = f"{who} rated “{claim_text or title}” as {rating or 'unrated'}."
+        reviewed = claim_text or title
+        meaning = {
+            Stance.REFUTES: "the reviewed statement is false or misleading",
+            Stance.SUPPORTS: "the reviewed statement is true",
+        }.get(stance, "the review did not find it clearly true or false")
+        text = f"{who} reviewed the statement “{reviewed}” and rated it {rating or 'unrated'}: {meaning}."
         passages.append(
             Passage(
                 source="google_factcheck",
@@ -82,6 +88,7 @@ def _reviews(claim: dict[str, Any]) -> list[Passage]:
                 native_stance=stance,
                 native_confidence=confidence,
                 rating=rating or None,
+                reviewed_claim=reviewed,
             )
         )
     return passages

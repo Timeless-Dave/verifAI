@@ -310,3 +310,35 @@ def test_combine_two_experts_and_rollup():
     none_verdict, _, none_text = rollup([], [])
     assert none_verdict is Verdict.UNVERIFIABLE
     assert "No checkable claim" in none_text
+
+
+def _review(reviewed: str, stance: Stance, rating: str) -> Passage:
+    return Passage(
+        source="google_factcheck",
+        family="google_factcheck",
+        title=reviewed,
+        url="https://factcheck.example/1",
+        text=f"A desk reviewed the statement “{reviewed}” and rated it {rating}.",
+        native_stance=stance,
+        native_confidence=0.9,
+        rating=rating,
+        reviewed_claim=reviewed,
+    )
+
+
+def test_a_review_of_the_opposite_statement_is_not_applied_blindly():
+    from verifai.experts.claim_check import _judge, same_statement
+
+    opposite = _review("Vaccines cause autism.", Stance.REFUTES, "False")
+    claim = "Vaccines do not cause autism."
+    unjudged = _judge(NullJudge(), claim, opposite)
+    assert unjudged.stance is Stance.NEUTRAL
+    assert "different statement" in unjudged.explanation
+    same = _review("vaccines do not cause autism", Stance.SUPPORTS, "True")
+    assert _judge(NullJudge(), claim, same).stance is Stance.SUPPORTS
+    judged = _judge(ScriptedJudge(Stance.SUPPORTS, 0.95), claim, opposite)
+    assert judged.stance is Stance.SUPPORTS
+    assert judged.confidence == 0.9  # never more sure than the review itself
+    assert same_statement("The sky is blue.", "the sky is blue")
+    assert not same_statement("The sky is blue.", "The sky is not blue.")
+    assert not same_statement("The sky is blue.", "Grass is green in spring.")

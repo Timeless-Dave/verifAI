@@ -24,6 +24,8 @@ class Passage:
     native_stance: Stance | None = None
     native_confidence: float | None = None
     rating: str | None = None
+    # The statement a fact-checker rated, when it is not the claim itself.
+    reviewed_claim: str | None = None
 
 
 @dataclass
