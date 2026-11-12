@@ -8,7 +8,9 @@ from collections.abc import Callable
 from verifai.experts.citation.extract import ExtractedCitation, find_references
 from verifai.retrieval.textutil import extract_urls
 
-_SPLIT = re.compile(r"(?<=[.!?])\s+")
+# Sentence ends: Latin punctuation before a space (also after a closing
+# quote), and CJK full stops, which take no space after them.
+_SPLIT = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\"”’»])\s+|(?<=[。！？．])")
 _REFERENCE = re.compile(
     r"\b10\.\d{4,9}/|\bet\s+al\.?|\(\s*(?:19|20)\d{2}\s*\)",
     re.IGNORECASE,
@@ -83,19 +85,44 @@ _FINITE_VERB = re.compile(
 )
 # Text that talks to the checker, not about the world.
 _INSTRUCTION = re.compile(
-    r"\b(?:ignore|disregard)\s+(?:all\s+|any\s+)?(?:prior|previous|above|earlier)\b|"
+    r"\b(?:ignore|disregard|skip|bypass)\s+(?:all\s+|any\s+|the\s+)?(?:prior|previous|above|earlier|"
+    r"two-source|rules?|instructions?)\b|"
+    r"\bfor\s+the\s+next\s+(?:sentence|claim|line|item)\b|"
     r"\bsystem\s+(?:note|prompt|message)\b|\bmark\s+(?:every|all|each)\b|"
+    r"\b(?:output|return|label|answer)\s+(?:\w+\s+){0,2}(?:verified|true|supported)\b|"
+    r"\bpre-?approved\b|\b(?:ai|llm)\s+verifier\b|"
     r"\byou\s+are\s+now\b|\bas\s+an\s+ai\b",
     re.IGNORECASE,
 )
+# A verdict typed into the paste is not a claim about the world.
+_FAKE_LABEL = re.compile(
+    r"[✅✔☑]|\bVERIFIED\b|\b(?:supported|confirmed)\s+by\s+\w+\s+and\s+\w+", re.IGNORECASE
+)
+_MARKUP = re.compile(
+    r"<!--.*?-->|<script\b.*?</script\s*>|<style\b.*?</style\s*>|</?(?!https?:)[a-z][^>\n]{0,400}>",
+    re.IGNORECASE | re.DOTALL,
+)
+_JSON_LINE = re.compile(r"^\s*[\[{].*[\]}]\s*$")
+_ENCODED = re.compile(r"^\s*[A-Za-z0-9+/]{24,}={0,2}\s*$")
+_EMOJI = re.compile("[\U0001f300-\U0001faff\u2600-\u27bf\ufe0f]")
 _META = re.compile(
     r"^(?:here'?s|here\s+is|here\s+are|below\s+(?:is|are)|the\s+following|in\s+summary|"
-    r"to\s+summari[sz]e|sources?:|references?:|books?:|see\s+also\b)",
+    r"to\s+summari[sz]e|sources?:|references?:|books?:|see\s+also\b|quick\s+\w+|"
+    r"treat\s+(?:this\s+|it\s+)?(?:carefully|with\s+care|with\s+caution))",
     re.IGNORECASE,
 )
 _OPINION = re.compile(
     r"\b(?:i|we)\s+(?:think|believe|feel)\b|\b(?:feel|feels|felt)\b|"
-    r"\bin\s+my\s+(?:view|opinion)\b|\barguably\b|\b(?:elegant|beautiful|overrated|underrated)\b",
+    r"\bin\s+my\s+(?:view|opinion)\b|\barguably\b|\b(?:elegant|beautiful|overrated|underrated)\b|"
+    # A report of what others believe, not a claim the paste makes.
+    r"\b(?:some|many|few|most)\s+(?:people|folks|critics|users|experts)\s+"
+    r"(?:claim|say|believe|think|argue|insist)\b",
+    re.IGNORECASE,
+)
+# Hypotheticals and sarcasm are not claims.
+_NOT_ASSERTED = re.compile(
+    r"^(?:if|suppose|supposing|imagine|what\s+if|assuming|oh\s+sure|yeah\s+right|"
+    r"sure,|as\s+if|right,\s+and)\b",
     re.IGNORECASE,
 )
 _YEAR_ONLY = re.compile(r"^\s*(?:19|20)\d{2}[a-z]?\s*$")
@@ -116,19 +143,38 @@ def find_claims(text: str) -> list[str]:
     changed Y". Opinions, notes to the reader, and instructions aimed at the
     checker are not claims.
     """
+    return screen_paste(text)[0]
+
+
+def screen_paste(text: str) -> tuple[list[str], list[str]]:
+    """Claims to check, and the pieces set aside because they talk to the checker.
+
+    Markup, JSON, encoded blobs, and instructions aimed at the checker are
+    removed and reported, never silently. Only the offending piece goes: a
+    real claim on the same line as an injection is still checked.
+    """
     claims: list[str] = []
     seen: set[str] = set()
     body = _without_bibtex(without_references(text or ""))
+    ignored = [" ".join(markup.split())[:160] for markup in _MARKUP.findall(body)]
+    body = _MARKUP.sub(" ", body)
     for chunk in re.split(r"\n+", body):
+        if _JSON_LINE.match(chunk) or _ENCODED.match(chunk):
+            ignored.append(chunk.strip()[:160])
+            continue
         citation_line = bool(_CITATION_MARK.search(chunk) or find_references(chunk))
         for sentence in split_sentences(_without_citation_parens(chunk)):
-            cleaned = " ".join(sentence.split()).replace(" ,", ",").replace(" .", ".")
+            cleaned = " ".join(_EMOJI.sub(" ", sentence).split())
+            cleaned = cleaned.replace(" ,", ",").replace(" .", ".")
+            if _INSTRUCTION.search(cleaned) or _FAKE_LABEL.search(cleaned):
+                ignored.append(cleaned[:160])
+                continue
             folded = cleaned.casefold()
             if folded in seen or not _keep(cleaned, citation_line=citation_line):
                 continue
             seen.add(folded)
             claims.append(cleaned)
-    return claims
+    return claims, list(dict.fromkeys(item for item in ignored if item.strip()))
 
 
 def split_sentences(text: str) -> list[str]:
@@ -192,7 +238,14 @@ def _without_bibtex(text: str) -> str:
 
 
 def _keep(sentence: str, *, citation_line: bool = False) -> bool:
-    if len(sentence) < 30 or len(sentence) > 500 or sentence.endswith("?"):
+    if sentence.endswith(("?", "？")) or len(sentence) > 500:
+        return False
+    # Short claims are claims: "All mammals lay eggs." CJK packs a claim into
+    # few characters.
+    cjk = bool(re.search(r"[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]", sentence))
+    if len(sentence) < (5 if cjk else 14) or (not cjk and len(sentence.split()) < 3):
+        return False
+    if _NOT_ASSERTED.search(sentence):
         return False
     if _REFERENCE.search(sentence) and re.search(r"\b(?:19|20)\d{2}\b", sentence):
         return False
@@ -212,10 +265,14 @@ def _keep(sentence: str, *, citation_line: bool = False) -> bool:
 
 
 def _title_case(sentence: str) -> bool:
-    words = [word for word in _WORD.findall(sentence) if word.casefold() not in _MINOR]
+    words = [
+        word
+        for word in _WORD.findall(sentence)
+        if word.casefold() not in _MINOR and not word[0].isdigit()
+    ]
     if len(words) < 4:
         return False
-    capped = sum(1 for word in words if word[0].isupper() or word[0].isdigit())
+    capped = sum(1 for word in words if word[0].isupper())
     return capped / len(words) >= 0.8
 
 

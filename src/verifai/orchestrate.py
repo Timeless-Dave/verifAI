@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
-from verifai.claims import find_claims, only_links, without_references
+from verifai.claims import only_links, screen_paste, without_references
 from verifai.corroboration import SourceVote, Stance, corroborate
 from verifai.experts.base import Expert
 from verifai.experts.claim_check import NOT_MEDICAL_ADVICE
@@ -29,12 +30,14 @@ class CheckBundle:
     claims_found: int = 0
     claims_checked: int = 0
     claims_skipped: tuple[str, ...] = ()
+    # Pieces of the paste set aside because they address the checker.
+    ignored: tuple[str, ...] = ()
 
 
 def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
     results = [expert.check(text) for expert in router.select(text) if expert.name == "citation"]
     combined: list[CombinedClaim] = []
-    subjects = _subjects(text)
+    subjects, ignored = _subjects(text)
     checked = subjects[:limit]
     for claim in checked:
         experts = [expert for expert in router.select(claim) if expert.name != "citation"]
@@ -46,7 +49,8 @@ def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
     citations = [
         item for result in results if result.expert == "citation" for item in result.citations
     ]
-    combined = [_with_citation_notes(claim, citations) for claim in combined]
+    references = _numbered_references(text)
+    combined = [_with_citation_notes(claim, citations, references) for claim in combined]
     verdict, confidence, explanation = rollup(combined, results)
     if len(subjects) > len(checked):
         explanation = (
@@ -62,6 +66,7 @@ def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
         claims_found=len(subjects),
         claims_checked=len(checked),
         claims_skipped=tuple(subjects[len(checked) :]),
+        ignored=tuple(ignored),
     )
 
 
@@ -73,7 +78,21 @@ _CITATION_WARNINGS = {
 }
 
 
-def _with_citation_notes(claim: CombinedClaim, citations: list[CitationResult]) -> CombinedClaim:
+def _numbered_references(text: str) -> dict[str, str]:
+    """Reference-list entries by number: "[15] Mehra, M. R. …" under "15"."""
+    entries: dict[str, str] = {}
+    for line in (text or "").splitlines():
+        match = re.match(r"\s*\[(\d{1,3})\]\s+(\S.*)", line)
+        if match:
+            entries.setdefault(match.group(1), line.strip())
+    return entries
+
+
+def _with_citation_notes(
+    claim: CombinedClaim,
+    citations: list[CitationResult],
+    references: dict[str, str] | None = None,
+) -> CombinedClaim:
     """Say so when the claim's own line cites a bad source.
 
     "This study proved that the MMR vaccine causes autism" sits after a
@@ -81,10 +100,22 @@ def _with_citation_notes(claim: CombinedClaim, citations: list[CitationResult]) 
     reader should know what it leans on.
     """
     folded = " ".join(claim.claim.casefold().split())
+    # The claim's own line, plus any reference it points to by number: a
+    # claim ending "… as shown by Mehra et al. [15]" leans on entry [15].
+    pointed = [
+        " ".join(references[number].casefold().split())
+        for number in re.findall(r"\[(\d{1,3})\]", claim.claim)
+        if references and number in references
+    ]
+
+    def leans_on(item: CitationResult) -> bool:
+        raw = " ".join(item.raw.casefold().split())
+        return folded in raw or any(raw and (raw in entry or entry in raw) for entry in pointed)
+
     notes = [
         f"The source cited for this claim ({_short(item)}) {_CITATION_WARNINGS[item.status]}."
         for item in citations
-        if item.status in _CITATION_WARNINGS and folded in " ".join(item.raw.casefold().split())
+        if item.status in _CITATION_WARNINGS and leans_on(item)
     ]
     if not notes:
         return claim
@@ -173,16 +204,18 @@ def _rollup_claims(
     )
 
 
-def _subjects(text: str) -> list[str]:
-    claims = find_claims(text)
+def _subjects(text: str) -> tuple[list[str], list[str]]:
+    claims, ignored = screen_paste(text)
     if claims:
-        return claims
+        return claims, ignored
+    if ignored:
+        return [], ignored  # never fall back to checking text that addressed the checker
     cleaned = " ".join(without_references(text).split())
     if only_links(cleaned):
-        return []
+        return [], ignored
     if cleaned and domains_for(cleaned):
-        return [cleaned[:800]]
-    return []
+        return [cleaned[:800]], ignored
+    return [], ignored
 
 
 def _check(expert: Expert, claim: str) -> ExpertResult | None:
