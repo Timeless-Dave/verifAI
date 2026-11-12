@@ -308,3 +308,44 @@ def test_the_card_shows_the_translation_and_an_uncertain_one() -> None:
     card = claim_card(doubtful)
     assert "Translation uncertain: try it in English" in card.flags
     assert card.headline.startswith("Two translations disagreed")
+
+
+def test_two_wikidata_items_are_one_source() -> None:
+    from verifai.corroboration import SourceVote, corroborate
+
+    result = corroborate(
+        [
+            SourceVote(
+                "wikidata", "wikidata", Stance.SUPPORTS, 0.9, document_ids=("wikidata:Q117",)
+            ),
+            SourceVote(
+                "wikidata", "wikidata", Stance.SUPPORTS, 0.9, document_ids=("wikidata:Q8673",)
+            ),
+        ]
+    )
+    assert result.verdict.value == "unverifiable"
+    papers = corroborate(
+        [
+            SourceVote("pubmed", "pubmed", Stance.REFUTES, 0.9, document_ids=("pmid:1",)),
+            SourceVote("pubmed", "pubmed", Stance.REFUTES, 0.9, document_ids=("pmid:2",)),
+        ]
+    )
+    assert papers.verdict.value == "unsupported"
+
+
+def test_german_with_shared_words_is_not_english() -> None:
+    assert needs_english("Die Zugspitze liegt in Spanien.")
+    assert not needs_english("Die Hard is a film from 1988.")
+
+
+def test_the_main_article_outranks_a_side_article() -> None:
+    from verifai.corroboration import SourceVote
+    from verifai.experts.claim_check import _main_article_rules
+
+    votes = [
+        SourceVote("wikipedia", "wikipedia", Stance.SUPPORTS, 0.9, url="u/Microsoft"),
+        SourceVote("wikipedia", "wikipedia", Stance.REFUTES, 0.9, url="u/History"),
+        SourceVote("wikidata", "wikidata", Stance.SUPPORTS, 0.9, url="d/Q2283"),
+    ]
+    kept = _main_article_rules(votes, "Microsoft was founded in 1975.", {"u/Microsoft"})
+    assert [vote.url for vote in kept] == ["u/Microsoft", "d/Q2283"]

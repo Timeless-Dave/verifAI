@@ -74,7 +74,7 @@ Confidence is how sure VerifAI is of that verdict, from 0 to 100%. It is not the
 
 ## How a check works
 
-1. **Split.** The paste is cleaned: zero-width characters are removed, DOIs broken across lines are rejoined, and look-alike characters are noted. It is then split into claims and citations. A claim that is not in English is translated into English with a separate model (Llama 3.3 70B on the public site), so that English sources can be searched. The claim's own Wikipedia edition is still searched in its own words, and the page shows the translation that was used.
+1. **Split.** The paste is cleaned: zero-width characters are removed, DOIs broken across lines are rejoined, and look-alike characters are noted. It is then split into claims and citations. A claim that is not in English is translated into English, so that English sources can be searched. Two different models translate it (Llama 3.3 70B and Qwen3 on the public site), and the two translations must make the same claim. If they disagree, VerifAI counts no source for that claim, marks the translation as uncertain, and asks for the claim in English. A guessed translation is never trusted: in testing, a single model once added a "not" to a Yoruba sentence. The claim's own Wikipedia edition is still searched in its own words, and the card shows the English it was read as.
 2. **Route.** Each claim goes to the checker that fits it. A sentence can go to more than one.
 
    | Checker | Sources | Used for |
@@ -324,7 +324,7 @@ See `CONTRIBUTING.md` before changing how verdicts are reached, and `SECURITY.md
 ## Known limitations
 
 - **Many true claims stay unverified.** A verdict needs two independent sources. For general knowledge, often only Wikipedia has a usable passage, and Wikidata stores structured facts (dates, places, creators), not statements like "bats are not blind". This is the price of rarely being wrong.
-- **Other languages depend on a translation.** A claim that is not in English is checked through its English translation, which the page shows. A wrong translation can lead to a wrong verdict. In testing, the translation model rendered Yoruba, Igbo, Hausa, Swahili, Japanese, Chinese, Russian, French, and German claims correctly, but rare languages and slang are riskier. Read the translation shown on the card.
+- **Other languages depend on a translation.** A claim that is not in English is checked through its English translation, which the card shows. Two models must agree on that translation, so a mistranslation usually ends as "Translation uncertain" rather than a wrong verdict. When both models make the same mistake, it can still mislead. Rare languages and slang are the riskiest. Read the translation shown on the card.
 - **The AI judge can misread a passage.** The two-source rule limits the damage: one misread passage cannot decide a verdict.
 - **Wikipedia search can still pick a side article.** For example, it might pick an article about a disease's history when the claim is about its cause. Opening the article the claim names reduces this but does not remove it.
 - **A verified citation exists, but VerifAI does not read the paper.** It may still be irrelevant to the claim or misquoted.

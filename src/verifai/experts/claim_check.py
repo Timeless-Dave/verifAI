@@ -74,6 +74,7 @@ def check_claim(
         )
     evidence: list[EvidenceItem] = []
     votes: list[SourceVote] = []
+    evidence_about: set[str] = set()
     consulted: list[str] = []
     contributed: list[str] = []
     unavailable: list[str] = []
@@ -101,6 +102,8 @@ def check_claim(
                 _item(passage, judgment.stance, judgment.confidence, judgment.explanation)
             )
             if judgment.stance is not Stance.NEUTRAL:
+                if passage.about and passage.about.casefold() in claim.casefold():
+                    evidence_about.add(passage.url or passage.title)
                 votes.append(
                     SourceVote(
                         source=passage.source,
@@ -113,7 +116,7 @@ def check_claim(
                         detail=judgment.explanation,
                     )
                 )
-    decision = corroborate(votes)
+    decision = corroborate(_main_article_rules(votes, claim, evidence_about))
     pieces = [decision.explanation]
     if unjudged:
         pieces.append(
@@ -372,6 +375,24 @@ def _retrieve_all(
         return [retriever.retrieve(query) for retriever in retrievers]
     with ThreadPoolExecutor(max_workers=min(workers, len(retrievers))) as pool:
         return list(pool.map(_call, retrievers, [query] * len(retrievers)))
+
+
+def _main_article_rules(votes: list[SourceVote], claim: str, about: set[str]) -> list[SourceVote]:
+    """Within one encyclopedia, the article about the claim's subject decides.
+
+    For "Microsoft was founded in 1975" the Microsoft article outranks a side
+    article a model misread. Other sources are untouched, and the main
+    article still counts as only one source.
+    """
+    del claim
+    families_with_main = {
+        vote.family for vote in votes if (vote.url or vote.title) in about and vote.family
+    }
+    return [
+        vote
+        for vote in votes
+        if vote.family not in families_with_main or (vote.url or vote.title) in about
+    ]
 
 
 def _merge_outcomes(

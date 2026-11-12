@@ -106,11 +106,17 @@ def _cluster_keys(members: list[SourceVote]) -> set[str]:
     return keys
 
 
+# A document id names one work, and two different papers are two sources.
+# A Wikidata id names an item in one database, so two Wikidata items (Ghana
+# and Lagos) are still only Wikidata: that family counts once.
+_ONE_DATABASE = frozenset({"wikidata"})
+
+
 def _keys(vote: SourceVote) -> tuple[str, ...]:
     if _is_google(vote):
         return ("family:google_factcheck",)
     documents = tuple(f"doc:{item}" for item in vote.document_ids if item)
-    if documents:
+    if documents and (vote.family or vote.source) not in _ONE_DATABASE:
         return documents
     family = vote.family or vote.source
     return (f"family:{family}",)
@@ -159,7 +165,13 @@ def _group_key(members: list[SourceVote]) -> str:
     if any(_is_google(member) for member in members):
         return "family:google_factcheck"
     documents = tuple(
-        dict.fromkeys(item for member in members for item in member.document_ids if item)
+        dict.fromkeys(
+            item
+            for member in members
+            if (member.family or member.source) not in _ONE_DATABASE
+            for item in member.document_ids
+            if item
+        )
     )
     if documents:
         return f"doc:{documents[0]}"

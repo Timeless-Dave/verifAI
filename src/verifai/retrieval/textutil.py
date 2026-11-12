@@ -351,6 +351,12 @@ _MARKERS: dict[str, frozenset[str]] = {
             "im",
             "zu",
             "sich",
+            "liegt",
+            "sind",
+            "wurde",
+            "hat",
+            "fließt",
+            "durch",
         ]
     ),
     "it": frozenset(
@@ -429,6 +435,15 @@ def needs_english(text: str) -> bool:
     words = [word.casefold() for word in _TOKEN.findall(text or "")]
     if len(words) < 3:
         return False
+    # "Die Zugspitze liegt in Spanien": German words match as often as the
+    # English-looking "in", so it is not English.
+    english = sum(word in _MARKERS["en"] for word in words)
+    if any(
+        sum(word in markers for word in words) >= max(1, english)
+        for lang, markers in _MARKERS.items()
+        if lang != "en"
+    ):
+        return True
     if any(not char.isascii() for char in text if char.isalpha()) and not any(
         word in _MARKERS["en"] for word in words
     ):
