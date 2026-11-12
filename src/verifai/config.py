@@ -38,7 +38,9 @@ class Settings(BaseSettings):
     openalex_api_key: str | None = None
     semantic_scholar_api_key: str | None = None
     google_factcheck_api_key: str | None = None
-    model_backend: Literal["auto", "mlx", "ollama", "llamacpp", "nli", "remote", "none"] = "auto"
+    model_backend: Literal[
+        "auto", "mlx", "ollama", "llamacpp", "nli", "remote", "hosted", "none"
+    ] = "auto"
     mlx_model: str = "mlx-community/Qwen3.5-9B-4bit"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:9b"
@@ -62,6 +64,12 @@ class Settings(BaseSettings):
     # the borrower sets remote_judge_url, the same token, and backend "remote".
     judge_token: str = ""
     remote_judge_url: str = ""
+    # A hosted open-weights model behind an OpenAI-compatible chat API, so a
+    # public site can judge claims with no machine of its own. Cloudflare
+    # Workers AI: https://api.cloudflare.com/client/v4/accounts/<id>/ai/v1
+    hosted_base_url: str = ""
+    hosted_model: str = "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
+    hosted_api_key: str = ""
 
     @property
     def max_body_bytes(self) -> int:

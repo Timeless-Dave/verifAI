@@ -31,6 +31,10 @@ def make_settings(**overrides: Any) -> Settings:
         "rate_limit_per_minute": 0,
         "rate_limit_per_hour": 0,
         "max_concurrent_checks": 4,
+        "judge_token": "",
+        "remote_judge_url": "",
+        "hosted_api_key": "",
+        "hosted_base_url": "",
     }
     values.update(overrides)
     return Settings.model_validate(values)

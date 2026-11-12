@@ -111,7 +111,7 @@ def test_unjudged_claims_say_so_and_ambiguous_dates_are_flagged() -> None:
     )
     card = claim_card(claim, judged=False)
     assert card.badge.label == "Not judged"
-    assert "no AI model" in card.headline
+    assert card.headline == "No source was found for this claim."
     assert any("Ambiguous date 9/11/1989" in flag for flag in card.flags)
 
 

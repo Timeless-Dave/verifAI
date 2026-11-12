@@ -84,3 +84,31 @@ def test_remote_backend_is_built_from_settings() -> None:
     )
     assert isinstance(judge, RemoteJudge)
     assert RemoteJudge("", "t").available() is False
+
+
+def test_hosted_judge_sends_the_key_and_reads_json() -> None:
+    from verifai.models.judge import HostedJudge
+
+    base = "https://api.cloudflare.com/client/v4/accounts/abc/ai/v1"
+    with respx.mock() as router:
+        route = router.post(f"{base}/chat/completions").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"stance":"refutes","confidence":0.9,"explanation":"No."}'
+                            }
+                        }
+                    ]
+                },
+            )
+        )
+        judge = HostedJudge(base, "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "key123")
+        assert judge.available()
+        assert judge.judge("c", "p").stance is Stance.REFUTES
+        sent = route.calls[0].request
+        assert sent.headers["authorization"] == "Bearer key123"
+        assert b'"max_tokens"' in sent.content
+    assert HostedJudge(base, "m", "").available() is False

@@ -164,6 +164,22 @@ class OllamaJudge(GenerativeJudge):
         super().__init__("ollama", _ollama_complete(self.base_url, model, client))
 
 
+class HostedJudge(GenerativeJudge):
+    """An open-weights model served behind an OpenAI-compatible chat API."""
+
+    def __init__(
+        self, base_url: str, model: str, api_key: str, *, client: httpx.Client | None = None
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        complete = (
+            _llamacpp_complete(self.base_url, model, client, api_key=api_key)
+            if self.base_url and api_key
+            else None
+        )
+        super().__init__("hosted", complete)
+
+
 class LlamaCppJudge(GenerativeJudge):
     def __init__(self, base_url: str, model: str, *, client: httpx.Client | None = None) -> None:
         self.base_url = base_url.rstrip("/")
@@ -307,6 +323,8 @@ def build_judge(settings: Settings) -> Judge:
         return LlamaCppJudge(settings.llamacpp_base_url, settings.llamacpp_model)
     if backend == "remote":
         return RemoteJudge(settings.remote_judge_url, settings.judge_token)
+    if backend == "hosted":
+        return HostedJudge(settings.hosted_base_url, settings.hosted_model, settings.hosted_api_key)
     return AutoJudge(settings)
 
 
@@ -406,19 +424,29 @@ def _ollama_complete(base_url: str, model: str, client: httpx.Client | None) -> 
     return complete
 
 
-def _llamacpp_complete(base_url: str, model: str, client: httpx.Client | None) -> Complete:
+def _llamacpp_complete(
+    base_url: str, model: str, client: httpx.Client | None, *, api_key: str = ""
+) -> Complete:
+    """OpenAI-style chat completions: llama.cpp locally, or a hosted provider."""
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+    body_extra: dict[str, Any] = (
+        {"max_tokens": 300} if api_key else {"chat_template_kwargs": {"enable_thinking": False}}
+    )
+
     def complete(prompt: str) -> str:
-        http = client or httpx.Client(timeout=httpx.Timeout(120.0, connect=5.0))
+        http = client or httpx.Client(timeout=httpx.Timeout(45.0, connect=5.0))
         try:
-            response = http.post(
-                f"{base_url}/chat/completions",
-                json={
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0,
-                    "chat_template_kwargs": {"enable_thinking": False},
-                },
-            )
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                **body_extra,
+            }
+            url = f"{base_url}/chat/completions"
+            if headers:
+                response = http.post(url, json=payload, headers=headers)
+            else:
+                response = http.post(url, json=payload)
             response.raise_for_status()
             body = response.json()
         finally:

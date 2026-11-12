@@ -14,7 +14,7 @@
   </div>
   {% if view.confidence is not none %}{{ meter(view.confidence, view.badge.tone, view.confidence_label) }}{% endif %}
   {% if not view.judged and view.claims %}
-  <div class="notice note-model">{{ icon("i-question") }}<p><strong>Claims are not judged on this server.</strong> It has no AI model, so it finds sources for each claim but cannot weigh them. Citations are checked in full. For claim verdicts, use VerifAI on a computer that runs the model.</p></div>
+  <div class="notice note-model">{{ icon("i-question") }}<p><strong>Claim verdicts are paused for the moment.</strong> The sources for each claim are listed below, and every citation was checked in full. Try again in a few minutes for claim verdicts.</p></div>
   {% endif %}
   <dl class="stats">
     {% if view.claims_found %}

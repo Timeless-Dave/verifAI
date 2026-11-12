@@ -210,10 +210,10 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
     if not judged and not decided:
         badge = Badge("neutral", "i-question", "Not judged")
         headline = (
-            f"{_count(len(claim.evidence), 'source')} found, but this server has no AI model to "
-            "weigh them, so no verdict."
+            f"{_count(len(claim.evidence), 'source')} found. Claim verdicts are paused for the "
+            "moment, so they were not weighed."
             if claim.evidence
-            else "No source was found, and this server has no AI model to weigh one."
+            else "No source was found for this claim."
         )
     else:
         badge = VERDICT_BADGES[claim.verdict]
