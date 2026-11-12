@@ -258,10 +258,19 @@ def _insufficient(
             "at least two independent sources that agree."
         )
     present = support + refute
+    counted = {name for group in present for name in group.sources}
+    split = list(dict.fromkeys(vote.source for vote in directional if vote.source not in counted))
+    split_note = ""
+    if split:
+        names = [source_label(name) for name in split]
+        joined = names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" and {names[-1]}"
+        split_note = (
+            f" {joined} also answered, but its results pointed both ways, so it cast no vote."
+        )
     if len(present) == 1:
         return (
             "This stays unverified: insufficient evidence. Only "
-            f"{_name_list(present)} speaks to this claim. A verdict needs at "
+            f"{_name_list(present)} gives a usable answer.{split_note} A verdict needs at "
             "least two independent sources that agree."
         )
     if present:

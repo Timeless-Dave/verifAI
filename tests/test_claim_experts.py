@@ -153,7 +153,8 @@ def test_health_disclaimer_and_distinct_papers():
             _passage(
                 "pubmed",
                 "pubmed",
-                "Review A",
+                "Vitamin D and fractures: review A",
+                text="Vitamin D supplements and fractures in older adults were studied.",
                 document_ids=("pmid:1",),
                 publication_type="systematic review",
             )
@@ -161,7 +162,15 @@ def test_health_disclaimer_and_distinct_papers():
     )
     second = RetrievalResult(
         "europepmc",
-        passages=[_passage("europepmc", "europepmc", "Review B", document_ids=("pmid:2",))],
+        passages=[
+            _passage(
+                "europepmc",
+                "europepmc",
+                "Vitamin D and fractures: review B",
+                text="Vitamin D supplements did not reduce fractures in older adults.",
+                document_ids=("pmid:2",),
+            )
+        ],
     )
     expert = HealthExpert(
         [ScriptedRetriever("pubmed", first), ScriptedRetriever("europepmc", second)],
@@ -215,8 +224,20 @@ def test_news_shows_who_said_what():
     outlets = RetrievalResult(
         "gdelt",
         passages=[
-            _passage("gdelt", "outlet:alpha.news", "Alpha headline", speaker="alpha.news"),
-            _passage("gdelt", "outlet:beta.news", "Beta headline", speaker="beta.news"),
+            _passage(
+                "gdelt",
+                "outlet:alpha.news",
+                "Alpha headline",
+                text="The president signed the election bill.",
+                speaker="alpha.news",
+            ),
+            _passage(
+                "gdelt",
+                "outlet:beta.news",
+                "Beta headline",
+                text="President signs election bill Tuesday.",
+                speaker="beta.news",
+            ),
         ],
     )
     expert = NewsExpert(
@@ -237,11 +258,31 @@ def test_parallel_retrieve_still_corroborates():
         [
             ScriptedRetriever(
                 "wikipedia",
-                RetrievalResult("wikipedia", passages=[_passage("wikipedia", "wikipedia", "A")]),
+                RetrievalResult(
+                    "wikipedia",
+                    passages=[
+                        _passage(
+                            "wikipedia",
+                            "wikipedia",
+                            "A",
+                            text="The river flooded the town in 2011.",
+                        )
+                    ],
+                ),
             ),
             ScriptedRetriever(
                 "wikidata",
-                RetrievalResult("wikidata", passages=[_passage("wikidata", "wikidata", "B")]),
+                RetrievalResult(
+                    "wikidata",
+                    passages=[
+                        _passage(
+                            "wikidata",
+                            "wikidata",
+                            "B",
+                            text="2011 flood: the river flooded the town.",
+                        )
+                    ],
+                ),
             ),
         ],
         ScriptedJudge(Stance.SUPPORTS),

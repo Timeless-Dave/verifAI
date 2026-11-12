@@ -56,6 +56,7 @@ class CitationStatus(str, Enum):
     NOT_FOUND = "not_found"
     UNREACHABLE = "unreachable"
     RETRACTED = "retracted"
+    INVALID = "invalid"
 
 
 VERDICT_LABELS = {
@@ -71,6 +72,7 @@ STATUS_LABELS = {
     CitationStatus.NOT_FOUND: "Not found",
     CitationStatus.UNREACHABLE: "Unreachable",
     CitationStatus.RETRACTED: "Retracted",
+    CitationStatus.INVALID: "Invalid",
 }
 
 
@@ -97,6 +99,8 @@ class EvidenceItem(BaseModel):
     venue: str | None = None
     doi: str | None = None
     snippet: str | None = None
+    # Why the judge took this stance, kept apart from the source's own words.
+    reason: str | None = None
     score: float | None = None
     stance: str | None = None
     family: str | None = None
@@ -128,6 +132,7 @@ class CitationResult(BaseModel):
     matched_year: int | None = None
     matched_venue: str | None = None
     matched_url: str | None = None
+    occurrences: int = 1
 
     @computed_field
     def status_label(self) -> str:
@@ -211,3 +216,4 @@ class CheckResponse(BaseModel):
     explanation: str = ""
     claims_found: int = 0
     claims_checked: int = 0
+    claims_skipped: list[str] = Field(default_factory=list)

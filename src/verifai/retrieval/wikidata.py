@@ -57,6 +57,8 @@ PROPERTIES: dict[str, str] = {
     "P2067": "mass",
     "P2101": "melting point",
     "P2102": "boiling point",
+    "P1181": "numeric value",
+    "P2442": "also expressed as",
     "P2097": "term length of office",
     "P26": "spouse",
     "P69": "educated at",
@@ -86,6 +88,10 @@ _EVENT = re.compile(
     r"\b((?:19|20)\d{2})\s+((?:[A-Za-z.]+\s+){0,4}?"
     r"(?:presidential election|general election|election|summer olympics|winter olympics|"
     r"olympics|world cup|census|referendum))\b",
+    re.IGNORECASE,
+)
+_SUBJECT = re.compile(
+    r"(?:the\s+|a\s+|an\s+)?([a-z][a-z\s'’-]{2,50}?)\s+(?:is|are|was|were|has|have|equals)\b",
     re.IGNORECASE,
 )
 _ABBREVIATED = {"U.S.": "United States", "US": "United States", "U.K.": "United Kingdom"}
@@ -245,6 +251,11 @@ def entity_names(claim: str) -> list[str]:
     for span in spans:
         if not any(span in other for other in names):
             names.append(span)
+    if not names:
+        # "The speed of light is …" names no proper noun. Its subject is the item.
+        subject = _SUBJECT.match(text.strip())
+        if subject:
+            names.append(subject.group(1).strip())
     return names
 
 

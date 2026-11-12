@@ -11,6 +11,7 @@ from rapidfuzz import fuzz
 from verifai.corroboration import SourceVote, Stance, corroborate
 from verifai.models.judge import Judge
 from verifai.models.parsing import Judgment
+from verifai.retrieval.textutil import detect_language, search_terms_for
 from verifai.retrieval.types import Passage, RetrievalResult, Retriever
 from verifai.schemas import EvidenceItem, ExpertResult, ordered_sources, source_label
 
@@ -46,7 +47,7 @@ def check_claim(
             continue
         contributed.append(outcome.source)
         for passage in outcome.passages:
-            judgment = _judge(judge, claim, passage)
+            judgment = screen(claim, passage, _judge(judge, claim, passage))
             if passage.publication_type and "review" in passage.publication_type:
                 saw_review = True
             if passage.native_stance is None and passage.text and not judge.available():
@@ -159,10 +160,132 @@ def same_statement(left: str, right: str) -> bool:
     )
 
 
+# Words that appear in many claims and say nothing about the topic.
+_GENERIC = frozenset(
+    [
+        "study",
+        "studies",
+        "proved",
+        "prove",
+        "proves",
+        "shows",
+        "show",
+        "showed",
+        "found",
+        "claim",
+        "claims",
+        "research",
+        "evidence",
+        "people",
+        "general",
+        "population",
+        "approximately",
+        "official",
+        "greatly",
+        "contrary",
+        "popular",
+        "belief",
+        "first",
+        "described",
+        "really",
+        "actually",
+        "known",
+        "widely",
+        "said",
+        "says",
+        "according",
+        "true",
+        "false",
+    ]
+)
+_NOT_ABOUT = re.compile(
+    r"\b(?:does not|doesn't|do not|did not|never|no)\s+(?:\w+\s+){0,2}"
+    r"(?:mention|address|discuss|refer to|relate to|concern|cover|examine|study|test)",
+    re.IGNORECASE,
+)
+
+
+def key_terms(claim: str) -> list[str]:
+    lang = detect_language(claim)
+    return [term for term in search_terms_for(claim, lang, limit=12) if term not in _GENERIC]
+
+
+def on_topic(claim: str, passage: Passage) -> bool:
+    """The passage names enough of the claim's key terms to be about it.
+
+    A heart-muscle paper is not evidence about MMR and autism, whatever a
+    small model says. Terms match on their first five letters, so
+    "vaccine" also finds "vaccination".
+    """
+    terms = key_terms(claim)
+    if not terms:
+        return True
+    haystack = f"{passage.title} {passage.text}".casefold()
+
+    def present(term: str) -> bool:
+        stem = term[:5] if len(term) > 5 else term
+        return bool(re.search(rf"\b{re.escape(stem)}", haystack))
+
+    stems = {term[:5] if len(term) > 5 else term for term in terms}
+    if sum(1 for term in set(terms) if present(term)) < min(2, len(stems)):
+        return False
+    # "Smoking cigarettes increases lung cancer risk" is about smoking. A
+    # salt-and-cancer paper shares "cancer" and "risk" but not the subject.
+    subject = [term for term in key_terms(_subject(claim)) if term in terms]
+    title = passage.title.casefold()
+
+    def central(term: str) -> bool:
+        """In the title, or more than a passing mention in the text."""
+        stem = re.escape(term[:5] if len(term) > 5 else term)
+        return bool(re.search(rf"\b{stem}", title)) or len(re.findall(rf"\b{stem}", haystack)) >= 2
+
+    return not subject or any(central(term) for term in subject)
+
+
+_VERB = re.compile(
+    r"\b(?:is|are|was|were|has|have|had|does|do|did|can|could|will|would|may|might|"
+    r"causes?|caused|prevents?|increases?|reduces?|lowers?|raises?|cures?|leads?|"
+    r"won|said|says|created|published|described|proved)\b",
+    re.IGNORECASE,
+)
+
+
+def _subject(claim: str) -> str:
+    """The words before the first verb: "Smoking cigarettes" in "Smoking cigarettes increases…"."""
+    match = _VERB.search(claim)
+    return claim[: match.start()] if match else ""
+
+
+def screen(claim: str, passage: Passage, judgment: Judgment) -> Judgment:
+    """Drop a stance the passage cannot carry: off topic, or contradicted by its own reason."""
+    if judgment.stance is Stance.NEUTRAL:
+        return judgment
+    if passage.native_stance is not None and passage.reviewed_claim is None:
+        return judgment  # a rating published for this exact claim
+    if not on_topic(claim, passage):
+        return Judgment(
+            Stance.NEUTRAL, 0.0, "Not counted: this source is not about the claim's main subject."
+        )
+    if _NOT_ABOUT.search(judgment.explanation):
+        return Judgment(
+            Stance.NEUTRAL,
+            0.0,
+            "Not counted: the model's own reason says the source does not address the claim.",
+        )
+    return judgment
+
+
+def clip_words(text: str, limit: int) -> str:
+    """Shorten at a word boundary and mark the cut."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return f"{cut}…"
+
+
 def _item(passage: Passage, stance: Stance, confidence: float, explanation: str) -> EvidenceItem:
-    snippet = passage.text[:400]
-    if explanation:
-        snippet = f"{snippet} {explanation}".strip()[:500]
+    snippet = clip_words(passage.text, 320)
     return EvidenceItem(
         source=passage.source,
         title=passage.title,
@@ -171,6 +294,7 @@ def _item(passage: Passage, stance: Stance, confidence: float, explanation: str)
         year=passage.year,
         venue=passage.venue,
         snippet=snippet or None,
+        reason=clip_words(explanation, 300) or None,
         score=confidence,
         stance=stance.value,
         family=passage.family,

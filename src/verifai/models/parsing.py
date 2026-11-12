@@ -71,7 +71,11 @@ def parse_judgment(raw: str) -> Judgment:
     # A reasoning model may still emit a <think> block. The answer follows it.
     data = _extract_object(_THINK.sub("", raw))
     if data is None:
-        return Judgment(Stance.NEUTRAL, 0.0, "The local model did not return JSON.")
+        return Judgment(
+            Stance.NEUTRAL,
+            0.0,
+            "The model's answer could not be read, so this source was not counted.",
+        )
     stance = _STANCES.get(str(data.get("stance", "")).strip().lower(), Stance.NEUTRAL)
     confidence = _confidence(
         data.get("confidence"), default=0.5 if stance is not Stance.NEUTRAL else 0.0

@@ -52,7 +52,7 @@ def test_parse_judgment_reads_json_and_rejects_junk() -> None:
 
     missing = parse_judgment("no json here")
     assert missing.stance is Stance.NEUTRAL
-    assert "JSON" in missing.explanation
+    assert "could not be read" in missing.explanation
 
     broken = parse_judgment("{not json")
     assert broken.stance is Stance.NEUTRAL
