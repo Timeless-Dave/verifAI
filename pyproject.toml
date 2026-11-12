@@ -1,6 +1,6 @@
 [project]
 name = "verifai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Self-hosted claim verification. Verdicts come from retrieved evidence, not from a model's memory."
 readme = "README.md"
 license = "MIT"

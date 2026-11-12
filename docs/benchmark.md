@@ -155,7 +155,7 @@ Two fixes made before this run matter for reading older numbers. Qwen3.5 thinks 
 
 The way to more verdicts is more independent sources for general and news claims, not a looser rule. A Google Fact Check key adds PolitiFact and other reviews, which is the obvious next step for LIAR-style statements.
 
-## Results after v0.2.0 (unreleased)
+## Results for v0.3.0
 
 Same command, sample, and model as the v0.2.0 table, run on 2026-11-12 with the fixes since then: claims are only real sentences, Wikidata gives the judge each item's key facts, a clear majority of one source's articles counts once, and fact-check reviews are judged against the claim. The first run had no Google Fact Check key (code at `be8618b`; its report wrongly names `7fbfedb`, a bug fixed in `fb5961c`). The second ran at `fb5961c` with a key.
 

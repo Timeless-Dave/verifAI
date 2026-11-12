@@ -63,7 +63,7 @@ macOS sleeps by default. `caffeinate -s make run` keeps the Mac awake while the 
 
 ## Option B: a Linux server
 
-This stays up without your Mac. MLX does not run on Linux, so the judge is Ollama. A 4-bit 9B model wants about 16 GB of RAM. Without a GPU it is much slower than MLX on Apple silicon, and each check judges several passages. If you change the model, run `make bench` again, because the v0.2.0 numbers describe Qwen3.5 9B on MLX.
+This stays up without your Mac. MLX does not run on Linux, so the judge is Ollama. A 4-bit 9B model wants about 16 GB of RAM. Without a GPU it is much slower than MLX on Apple silicon, and each check judges several passages. If you change the model, run `make bench` again, because the published numbers describe Qwen3.5 9B on MLX.
 
 On an Ubuntu or Debian server with a domain pointed at it:
 
@@ -114,7 +114,7 @@ sudo systemctl reload caddy
 
 A serverless function cannot run the local model: there is no GPU, and the weights are far larger than a function bundle. Two setups can still work:
 
-- **No model.** Set `VERIFAI_MODEL_BACKEND=none`. The citation checker works fully, and it scored 16 of 16 in the v0.2.0 benchmark. Claims list their sources and stay unverified.
+- **No model.** Set `VERIFAI_MODEL_BACKEND=none`. The citation checker works fully, and it scored 16 of 16 in the v0.2.0 and v0.3.0 benchmarks. Claims list their sources and stay unverified.
 - **The model elsewhere.** Point `VERIFAI_OLLAMA_BASE_URL` at an Ollama server that the function can reach. That server is Option B without Caddy in front of VerifAI, and it needs its own protection, because Ollama has no authentication.
 
 On serverless, the in-process limits above do not hold: each instance counts on its own, and instances come and go. Use the host's own rate-limit rules in front of the app. The repository does not include a Vercel configuration yet, and this setup has not been tested.

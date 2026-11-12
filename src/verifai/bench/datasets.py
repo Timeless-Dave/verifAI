@@ -39,7 +39,7 @@ FEVER_URL = "https://fever.ai/download/fever/shared_task_dev.jsonl"
 SCIFACT_URL = "https://scifact.s3-us-west-2.amazonaws.com/release/latest/data.tar.gz"
 LIAR_URL = "https://www.cs.ucsb.edu/~william/data/liar_dataset.zip"
 USER_AGENT = (
-    "VerifAI/0.2.0 (https://github.com/Timeless-Dave/verifAI; mailto:verifai-dev@example.com)"
+    "VerifAI/0.3.0 (https://github.com/Timeless-Dave/verifAI; mailto:verifai-dev@example.com)"
 )
 
 DOMAIN_GENERAL = "general"

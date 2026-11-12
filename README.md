@@ -238,7 +238,7 @@ Matching uses RapidFuzz on normalized titles (case, accents, and punctuation fol
 | `VERIFAI_MAX_CONCURRENT_CHECKS`, `VERIFAI_CHECK_QUEUE_SECONDS` | `4`, `20` | Checks that run at once, and how long another waits before a 503. |
 | `VERIFAI_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxies whose `X-Forwarded-For` is trusted. See `docs/deploy.md`. |
 
-The process User-Agent looks like `VerifAI/0.2.0 (mailto:you@example.com)`.
+The process User-Agent looks like `VerifAI/0.3.0 (mailto:you@example.com)`.
 
 ## Public link
 
