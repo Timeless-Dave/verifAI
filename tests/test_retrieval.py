@@ -460,3 +460,26 @@ def test_current_events_filters_stories(polite_http, http_mock):
     assert events.retrieve("election results today").passages == []
     assert events.retrieve("election results today").unavailable
     assert events.retrieve("a").passages == []
+
+
+def test_fact_check_ratings_map_to_stances():
+    from verifai.corroboration import Stance
+    from verifai.retrieval.textutil import stance_from_rating
+
+    expected = {
+        "Not true": Stance.REFUTES,
+        "No es cierto": Stance.REFUTES,
+        "Faux": Stance.REFUTES,
+        "Falso": Stance.REFUTES,
+        "Pants on Fire!": Stance.REFUTES,
+        "Verdadero": Stance.SUPPORTS,
+        "Mostly True": Stance.SUPPORTS,
+        "Half True": Stance.NEUTRAL,
+        "Partly true": Stance.NEUTRAL,
+        "Missing context": Stance.NEUTRAL,
+        "Satire": Stance.NEUTRAL,
+    }
+    for rating, stance in expected.items():
+        assert stance_from_rating(rating)[0] is stance, rating
+    assert stance_from_rating("Partly false") == (Stance.REFUTES, 0.65)
+    assert stance_from_rating("False") == (Stance.REFUTES, 0.9)

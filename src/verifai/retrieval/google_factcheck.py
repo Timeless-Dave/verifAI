@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from verifai.http import PoliteHttp
-from verifai.retrieval.textutil import fetch_json, stance_from_rating
+from verifai.retrieval.textutil import detect_language, fetch_json, stance_from_rating
 from verifai.retrieval.types import Passage, RetrievalResult
 
 _API = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
@@ -29,7 +29,7 @@ class GoogleFactCheckRetriever:
             {
                 "query": text,
                 "key": self.api_key,
-                "languageCode": "en",
+                "languageCode": detect_language(text),
                 "pageSize": self.limit,
             },
             source=self.name,

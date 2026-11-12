@@ -149,28 +149,97 @@ def document_ids(*, doi: str | None = None, pmid: str | None = None) -> tuple[st
     return tuple(ids)
 
 
+_NEGATED_TRUE = re.compile(
+    r"\b(?:not|isn'?t|is not|un|no es|n'est pas|nicht|non è|não é)\s*(?:true|correct|accurate|"
+    r"verdadero|cierto|vrai|wahr|vero|verdadeiro)\b"
+)
+_PARTLY = re.compile(r"\b(?:partly|partially|half|mostly|largely|in part)\b")
+# English first, then French, Spanish, German, Italian, Portuguese.
+_FALSE_WORDS = (
+    "false",
+    "fake",
+    "incorrect",
+    "wrong",
+    "misleading",
+    "fabricated",
+    "hoax",
+    "baseless",
+    "faux",
+    "fausse",
+    "trompeur",
+    "falso",
+    "falsa",
+    "engañoso",
+    "falsch",
+    "irreführend",
+    "fuorviante",
+    "enganoso",
+)
+_TRUE_WORDS = (
+    "true",
+    "correct",
+    "accurate",
+    "verdadero",
+    "cierto",
+    "vrai",
+    "wahr",
+    "richtig",
+    "vero",
+    "verdadeiro",
+    "correcto",
+    "exact",
+)
+_UNDECIDED = (
+    "half true",
+    "half-true",
+    "mixture",
+    "mixed",
+    "unproven",
+    "satire",
+    "unverified",
+    "missing context",
+    "out of context",
+    "lacks context",
+    "exaggerat",
+    "needs context",
+    "unsupported",
+    "no evidence",
+    "sin pruebas",
+    "trompeur sans",
+    "à nuancer",
+)
+
+
 def stance_from_rating(rating: str) -> tuple[Stance, float]:
-    text = " ".join(rating.casefold().split())
+    """Map a fact-checker's verdict to a stance on the claim it reviewed.
+
+    "Not true" is a refutation, not support. A partial rating such as
+    "partly false" refutes at lower confidence. Words that mean false or
+    true in the five other languages detect_language knows are read too.
+    """
+    text = " ".join(rating.casefold().split()).strip(" !.")
     if not text:
         return Stance.NEUTRAL, 0.0
-    for bit in ("half true", "half-true", "mixture", "mixed", "unproven", "satire", "unverified"):
-        if bit in text:
-            return Stance.NEUTRAL, 0.4
+    if _NEGATED_TRUE.search(text):
+        return Stance.REFUTES, 0.85
+    if any(bit in text for bit in _UNDECIDED):
+        return Stance.NEUTRAL, 0.4
     for bit, confidence in (
         ("pants on fire", 0.9),
         ("four pinocchios", 0.9),
-        ("mostly false", 0.75),
+        ("three pinocchios", 0.75),
     ):
         if bit in text:
             return Stance.REFUTES, confidence
-    if "mostly true" in text:
-        return Stance.SUPPORTS, 0.75
-    for bit in ("false", "fake", "incorrect", "misleading"):
-        if bit in text:
-            return Stance.REFUTES, 0.65 if bit == "misleading" else 0.9
-    for bit in ("true", "correct", "accurate"):
-        if bit in text:
-            return Stance.SUPPORTS, 0.9
+    words = set(re.findall(r"[\w-]+", text))
+    partial = bool(_PARTLY.search(text))
+    if any(bit in words or bit in text.split("-") for bit in _FALSE_WORDS) or "misleading" in text:
+        confidence = 0.65 if partial or "misleading" in text or "engañoso" in text else 0.9
+        return Stance.REFUTES, confidence
+    if any(bit in words for bit in _TRUE_WORDS):
+        if re.search(r"\b(?:partly|partially|half|in part)\b", text):
+            return Stance.NEUTRAL, 0.4  # a mixed rating, like "half true"
+        return Stance.SUPPORTS, 0.75 if partial else 0.9
     return Stance.NEUTRAL, 0.3
 
 
