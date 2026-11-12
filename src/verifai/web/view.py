@@ -7,9 +7,11 @@ alone.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
+from verifai.experts.citation.extract import dangling_markers, unresolvable_mentions
 from verifai.orchestrate import CheckBundle
 from verifai.schemas import (
     CitationResult,
@@ -21,6 +23,7 @@ from verifai.schemas import (
 )
 
 _LITERATURE = {"pubmed", "europepmc"}
+_AMBIGUOUS_DATE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{2,4})\b")
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,8 @@ class ClaimCard:
     explanation: str
     groups: list[EvidenceGroup]
     health: bool
+    judged: bool = True
+    found: int = 0
 
 
 @dataclass(frozen=True)
@@ -99,6 +104,10 @@ class PageView:
     claims: list[ClaimCard]
     citations: list[CitationCard]
     skipped: list[str] = field(default_factory=list)
+    judged: bool = True
+    confidence_label: str = "Confidence"
+    ignored: list[str] = field(default_factory=list)
+    unchecked_pointers: list[str] = field(default_factory=list)
 
 
 VERDICT_BADGES = {
@@ -133,15 +142,28 @@ _PROBLEMS = {
 }
 
 
-def build_view(bundle: CheckBundle) -> PageView:
+def build_view(bundle: CheckBundle, *, judged: bool = True, text: str = "") -> PageView:
     citations = [item for result in bundle.results for item in result.citations]
-    claims = [claim_card(claim) for claim in bundle.combined]
+    claims = [claim_card(claim, judged=judged) for claim in bundle.combined]
     problems = sum(1 for item in citations if item.status in _PROBLEMS)
-    decided = bundle.verdict is not Verdict.UNVERIFIABLE
+    resolved = sum(1 for claim in bundle.combined if claim.verdict is not Verdict.UNVERIFIABLE)
+    # A confidence number only means something for what was resolved. With
+    # claims and none resolved, show none; with only citations, say so.
+    confidence: float | None = bundle.confidence
+    label = "Confidence"
+    if bundle.verdict is Verdict.UNVERIFIABLE or (bundle.combined and not resolved):
+        confidence = None
+    elif not resolved and citations:
+        label = "Citation check confidence"
+    pointers = dangling_markers(text) + unresolvable_mentions(text) if text else []
     return PageView(
         badge=VERDICT_BADGES[bundle.verdict],
         headline=_page_headline(bundle, citations, problems),
-        confidence=bundle.confidence if decided else None,
+        confidence=confidence,
+        confidence_label=label,
+        judged=judged,
+        ignored=list(bundle.ignored),
+        unchecked_pointers=pointers,
         claims_found=bundle.claims_found,
         claims_checked=bundle.claims_checked,
         citation_total=len(citations),
@@ -154,11 +176,18 @@ def build_view(bundle: CheckBundle) -> PageView:
     )
 
 
-def claim_card(claim: CombinedClaim) -> ClaimCard:
+def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
     support = _sources(claim.evidence, "supports")
     refute = _sources(claim.evidence, "refutes")
     unrelated = sum(1 for item in claim.evidence if item.stance not in {"supports", "refutes"})
     flags = []
+    date = _AMBIGUOUS_DATE.search(claim.claim)
+    if (
+        date
+        and date.group(1) != date.group(2)
+        and max(int(date.group(1)), int(date.group(2))) <= 12
+    ):
+        flags.append(f"Ambiguous date {date.group(0)}: day and month can be read either way")
     if "is retracted" in claim.explanation:
         flags.append("Cites a retracted paper")
     if "may be made up" in claim.explanation:
@@ -178,10 +207,23 @@ def claim_card(claim: CombinedClaim) -> ClaimCard:
         if by_stance[key]
     ]
     decided = claim.verdict is not Verdict.UNVERIFIABLE
+    if not judged and not decided:
+        badge = Badge("neutral", "i-question", "Not judged")
+        headline = (
+            f"{_count(len(claim.evidence), 'source')} found, but this server has no AI model to "
+            "weigh them, so no verdict."
+            if claim.evidence
+            else "No source was found, and this server has no AI model to weigh one."
+        )
+    else:
+        badge = VERDICT_BADGES[claim.verdict]
+        headline = claim_headline(claim.verdict, support, refute, claim.evidence)
     return ClaimCard(
         text=claim.claim,
-        badge=VERDICT_BADGES[claim.verdict],
-        headline=claim_headline(claim.verdict, support, refute, claim.evidence),
+        badge=badge,
+        headline=headline,
+        judged=judged or decided,
+        found=len(claim.evidence),
         confidence=claim.confidence if decided else None,
         support=len(support),
         refute=len(refute),

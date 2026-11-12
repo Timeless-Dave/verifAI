@@ -47,3 +47,56 @@
   </ul>
 </div>
 {%- endmacro %}
+
+{% macro claim_entry(card, number) -%}
+<article class="entry">
+  <span class="num">№ {{ "%02d"|format(number) }}</span>
+  <div class="entry-body">
+    <div class="entry-head">
+      {{ badge(card.badge) }}
+      <span>{% for name in card.experts %}<span class="tag">{{ name }}</span>{% endfor %}</span>
+      {% for flag in card.flags %}<span class="tag tag-alert">{{ icon("i-alert") }}{{ flag }}</span>{% endfor %}
+    </div>
+    <h3 class="claim-text">{{ card.text }}</h3>
+    <p class="claim-line">{{ card.headline }}</p>
+    {% if card.judged %}{{ balance(card) }}{% endif %}
+    {% if card.confidence is not none %}{{ meter(card.confidence, card.badge.tone) }}{% endif %}
+    <details class="why">
+      <summary>{{ icon("i-chevron", "icon chevron") }}{% if card.judged %}Why, and every source{% else %}The sources found{% endif %}</summary>
+      <p>{{ card.explanation }}</p>
+      {% for group in card.groups %}
+      {% if card.judged %}<h4 class="evidence-head"><span class="dot tone-{{ group.tone }}"></span>{{ group.label }} <span class="count">{{ group.items|length }}</span></h4>{% endif %}
+      <ul class="evidence">
+        {% for item in group.items %}
+        <li>
+          <span class="source">{{ source_label(item.source) }}{% if item.speaker %} · {{ item.speaker }}{% endif %}</span>
+          {% if item.url %}<a href="{{ item.url }}" rel="noopener noreferrer">{{ item.title or item.url }}</a>{% elif item.title %}<span>{{ item.title }}</span>{% endif %}
+          {% if item.reason and card.judged %}<p class="reason">{{ item.reason }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No source was retrieved for this claim.</p>
+      {% endfor %}
+    </details>
+    {% if card.health %}<p class="fine">{{ icon("i-alert") }}Not medical advice. It does not diagnose, treat, or recommend care.</p>{% endif %}
+  </div>
+</article>
+{%- endmacro %}
+
+{% macro continue_block(skipped, offset, total, batch, paused="") -%}
+{% if skipped %}
+<form class="more{% if paused %} more-paused{% endif %}" hx-post="/check/more" hx-trigger="{% if paused %}submit{% else %}load delay:250ms{% endif %}" hx-swap="outerHTML" data-more>
+  <input type="hidden" name="text" value="{{ skipped|join('\n') }}">
+  <input type="hidden" name="offset" value="{{ offset }}">
+  <input type="hidden" name="total" value="{{ total }}">
+  {% if paused %}
+  <span class="more-label" role="status">{{ paused }}</span>
+  <button type="submit" class="ghost">Resume checking</button>
+  {% else %}
+  <span class="spinner" aria-hidden="true"></span>
+  <span class="more-label" role="status">Checking claims {{ offset + 1 }}–{{ [offset + batch, total]|min }} of {{ total }}…</span>
+  {% endif %}
+</form>
+{% endif %}
+{%- endmacro %}

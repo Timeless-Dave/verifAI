@@ -29,23 +29,23 @@
       <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
       <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 5.5A1.5 1.5 0 0 1 6.5 4H19v14H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5A1.5 1.5 0 0 0 6.5 21H19"/></symbol>
       <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
     </defs>
   </svg>
-  <header class="masthead">
-    <div class="wrap">
-      <div class="masthead-strap">
-        <span>The claim desk · checked against live sources</span>
-        <nav class="masthead-nav" aria-label="Site">
-          <a href="/docs">API</a>
-          <a href="/privacy">Privacy</a>
-          <a href="https://github.com/Timeless-Dave/verifAI" rel="noopener noreferrer">GitHub</a>
-          <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false">Dark</button>
-        </nav>
-      </div>
-      <div class="nameplate">
-        <a class="wordmark" href="/" aria-label="VerifAI home">Verif<i>AI</i></a>
-        <p class="nameplate-note">Two sources, or no verdict.</p>
-      </div>
+  <header class="topbar">
+    <div class="wrap topbar-row">
+      <a class="wordmark" href="/" aria-label="VerifAI home">Verif<i>AI</i></a>
+      <span class="topbar-note">The claim desk · two sources, or no verdict</span>
+      <nav class="topbar-nav" aria-label="Site">
+        <a href="/docs">API</a>
+        <a href="/privacy">Privacy</a>
+        <a href="https://github.com/Timeless-Dave/verifAI" rel="noopener noreferrer">GitHub</a>
+        <button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode">
+          <svg class="icon theme-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+          <svg class="icon theme-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+        </button>
+      </nav>
     </div>
   </header>
   <main class="wrap">

@@ -10,8 +10,9 @@
       return;
     }
     var dark = document.documentElement.dataset.theme === "dark";
-    toggle.textContent = dark ? "Light" : "Dark";
-    toggle.setAttribute("aria-pressed", dark ? "true" : "false");
+    var label = dark ? "Switch to light mode" : "Switch to dark mode";
+    toggle.setAttribute("aria-label", label);
+    toggle.setAttribute("title", label);
   }
   if (toggle) {
     showTheme();
@@ -61,8 +62,36 @@
     results.replaceChildren(box);
   }
 
+  // A follow-up batch refused at the edge pauses in place, with a button to
+  // resume, instead of wiping the results already on the page.
+  function pauseBatch(form, text) {
+    form.classList.add("more-paused");
+    form.setAttribute("hx-trigger", "submit");
+    Array.prototype.slice.call(form.children).forEach(function (child) {
+      if (child.tagName !== "INPUT") {
+        child.remove();
+      }
+    });
+    var label = document.createElement("span");
+    label.className = "more-label";
+    label.textContent = text;
+    var resume = document.createElement("button");
+    resume.type = "submit";
+    resume.className = "ghost";
+    resume.textContent = "Resume checking";
+    form.append(label, resume);
+    if (window.htmx) {
+      window.htmx.process(form);
+    }
+  }
+
   document.body.addEventListener("htmx:responseError", function (event) {
     var status = event.detail.xhr ? event.detail.xhr.status : 0;
+    var form = event.detail.elt && event.detail.elt.closest ? event.detail.elt.closest("[data-more]") : null;
+    if (form) {
+      pauseBatch(form, status === 429 ? "Paused: too many checks from your network. Wait a minute." : "Paused: the next batch could not finish.");
+      return;
+    }
     if (status === 429) {
       notice("Too many checks from your network right now. Wait a minute, then try again.");
     } else if (status === 413) {

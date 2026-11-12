@@ -1,0 +1,8 @@
+{% from "_ui.html" import claim_entry, continue_block %}
+{% if paused %}
+{{ continue_block(skipped, offset, total, batch, paused) }}
+{% else %}
+{% for card in cards %}{{ claim_entry(card, offset + loop.index) }}{% endfor %}
+{{ continue_block(skipped, offset + cards|length, total, batch) }}
+<span id="claims-done" hx-swap-oob="true">{{ offset + cards|length }}</span>
+{% endif %}

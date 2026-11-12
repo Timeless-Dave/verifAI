@@ -76,7 +76,9 @@ def build_web_router() -> APIRouter:
                 context["confidence"] = bundle.confidence
                 context["explanation"] = bundle.explanation
                 context["skipped"] = list(bundle.claims_skipped)
-                context["view"] = build_view(bundle)
+                context["view"] = build_view(
+                    bundle, judged=request.app.state.judge.available(), text=cleaned
+                )
             except Throttled as refused:
                 context["error"] = refused.message
             except Exception:
@@ -120,6 +122,39 @@ def build_web_router() -> APIRouter:
             claims_checked=bundle.claims_checked,
             claims_skipped=list(bundle.claims_skipped),
         )
+
+    @router.post("/check/more", response_class=HTMLResponse)
+    def check_more(
+        request: Request,
+        text: Annotated[str, Form()] = "",
+        offset: Annotated[int, Form()] = 0,
+        total: Annotated[int, Form()] = 0,
+    ) -> HTMLResponse:
+        """The next batch of claims from a paste, appended where the last one ended."""
+        settings = request.app.state.settings
+        _, cleaned = _validate(text, settings.max_text_chars)
+        claims = [line.strip() for line in cleaned.splitlines() if line.strip()]
+        context: dict[str, Any] = {
+            "offset": max(0, offset),
+            "total": max(total, offset + len(claims)),
+            "batch": settings.max_claims,
+            "skipped": claims,
+            "cards": [],
+            "paused": "",
+        }
+        try:
+            bundle = _run(request, "\n".join(claims))
+        except Throttled as refused:
+            context["paused"] = refused.message
+            return _render(request, "more.html", context)
+        except Exception:
+            log.exception("follow-up check failed")
+            context["paused"] = "This batch could not finish."
+            return _render(request, "more.html", context)
+        view = build_view(bundle, judged=request.app.state.judge.available())
+        context["cards"] = view.claims
+        context["skipped"] = list(bundle.claims_skipped)
+        return _render(request, "more.html", context)
 
     @router.get("/health")
     def health(request: Request) -> dict[str, Any]:

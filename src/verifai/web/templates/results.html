@@ -1,4 +1,4 @@
-{% from "_ui.html" import icon, badge, meter, segbar, balance %}
+{% from "_ui.html" import icon, badge, meter, segbar, balance, claim_entry, continue_block %}
 {% if error %}
 <div class="notice tone-warning" role="alert">{{ icon("i-alert") }}<p>{{ error }}</p></div>
 {% elif results is not none and results|length == 0 %}
@@ -12,10 +12,13 @@
       <p class="summary-line">{{ view.headline }}</p>
     </div>
   </div>
-  {% if view.confidence is not none %}{{ meter(view.confidence, view.badge.tone) }}{% endif %}
+  {% if view.confidence is not none %}{{ meter(view.confidence, view.badge.tone, view.confidence_label) }}{% endif %}
+  {% if not view.judged and view.claims %}
+  <div class="notice note-model">{{ icon("i-question") }}<p><strong>Claims are not judged on this server.</strong> It has no AI model, so it finds sources for each claim but cannot weigh them. Citations are checked in full. For claim verdicts, use VerifAI on a computer that runs the model.</p></div>
+  {% endif %}
   <dl class="stats">
     {% if view.claims_found %}
-    <div class="stat"><dt>Claims checked</dt><dd>{{ view.claims_checked }}{% if view.claims_found > view.claims_checked %}<small> / {{ view.claims_found }}</small>{% endif %}</dd></div>
+    <div class="stat"><dt>Claims checked</dt><dd><span id="claims-done">{{ view.claims_checked }}</span>{% if view.claims_found > view.claims_checked %}<small> / {{ view.claims_found }}</small>{% endif %}</dd></div>
     {% endif %}
     {% if view.citation_total %}
     <div class="stat"><dt>Citations</dt><dd>{{ view.citation_total }}</dd></div>
@@ -26,6 +29,16 @@
     {% if view.claim_bar %}{{ segbar(view.claim_bar) }}{% endif %}
     {% if view.citation_bar %}{{ segbar(view.citation_bar) }}{% endif %}
   </div>
+  {% if view.unchecked_pointers %}
+  <p class="aside">{{ icon("i-alert") }}<span><strong>Pointers with nothing to look up:</strong> {{ view.unchecked_pointers|join(", ") }}.</span></p>
+  {% endif %}
+  {% if view.ignored %}
+  <details class="aside-list">
+    <summary>{{ icon("i-chevron", "icon chevron") }}Set aside {{ view.ignored|length }} piece{% if view.ignored|length != 1 %}s{% endif %} that addressed the checker, not the reader</summary>
+    <ul>{% for item in view.ignored %}<li><code>{{ item }}</code></li>{% endfor %}</ul>
+    <p class="muted">Markup, code, encoded text, and instructions to the checker are never checked or obeyed. The claims around them still are.</p>
+  </details>
+  {% endif %}
   <details class="why">
     <summary>{{ icon("i-chevron", "icon chevron") }}How this verdict was reached</summary>
     <p>{{ explanation }}</p>
@@ -35,53 +48,8 @@
 {% if view.claims %}
 <section class="group" aria-labelledby="claims-h">
   <h2 id="claims-h" class="group-title">The claims <span class="count">{{ view.claims|length }} checked</span></h2>
-  {% for card in view.claims %}
-  <article class="entry">
-    <span class="num">№ {{ "%02d"|format(loop.index) }}</span>
-    <div class="entry-body">
-      <div class="entry-head">
-        {{ badge(card.badge) }}
-        <span>{% for name in card.experts %}<span class="tag">{{ name }}</span>{% endfor %}</span>
-        {% for flag in card.flags %}<span class="tag tag-alert">{{ icon("i-alert") }}{{ flag }}</span>{% endfor %}
-      </div>
-      <h3 class="claim-text">{{ card.text }}</h3>
-      <p class="claim-line">{{ card.headline }}</p>
-      {{ balance(card) }}
-      {% if card.confidence is not none %}{{ meter(card.confidence, card.badge.tone) }}{% endif %}
-      <details class="why">
-        <summary>{{ icon("i-chevron", "icon chevron") }}Why, and every source</summary>
-        <p>{{ card.explanation }}</p>
-        {% for group in card.groups %}
-        <h4 class="evidence-head"><span class="dot tone-{{ group.tone }}"></span>{{ group.label }} <span class="count">{{ group.items|length }}</span></h4>
-        <ul class="evidence">
-          {% for item in group.items %}
-          <li>
-            <span class="source">{{ source_label(item.source) }}{% if item.speaker %} · {{ item.speaker }}{% endif %}</span>
-            {% if item.url %}<a href="{{ item.url }}" rel="noopener noreferrer">{{ item.title or item.url }}</a>{% elif item.title %}<span>{{ item.title }}</span>{% endif %}
-            {% if item.reason %}<p class="reason">{{ item.reason }}</p>{% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <p class="muted">No source was retrieved for this claim.</p>
-        {% endfor %}
-      </details>
-      {% if card.health %}<p class="fine">{{ icon("i-alert") }}Not medical advice. It does not diagnose, treat, or recommend care.</p>{% endif %}
-    </div>
-  </article>
-  {% endfor %}
-
-  {% if view.skipped %}
-  <div class="skipped">
-    <h3>{{ view.skipped|length }} more claim{% if view.skipped|length != 1 %}s{% endif %} waiting</h3>
-    <p class="muted">A paste is checked a few claims at a time.</p>
-    <ul>{% for item in view.skipped %}<li>{{ item }}</li>{% endfor %}</ul>
-    <form method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator=".check-form" hx-disabled-elt="find button">
-      <input type="hidden" name="text" value="{{ view.skipped|join('\n') }}">
-      <button type="submit" class="primary">Check these {{ view.skipped|length }}</button>
-    </form>
-  </div>
-  {% endif %}
+  {% for card in view.claims %}{{ claim_entry(card, loop.index) }}{% endfor %}
+  {{ continue_block(view.skipped, view.claims|length, view.claims_found, view.claims|length) }}
 </section>
 {% endif %}
 
