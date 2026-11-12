@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from verifai.config import Settings
+from verifai.net import public_url_problem
 
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 CACHEABLE_STATUSES = frozenset({200, 201, 204, 301, 302, 303, 307, 308, 401, 403, 404, 410})
@@ -136,6 +137,7 @@ class PoliteHttp:
             follow_redirects=True,
             max_redirects=5,
             limits=httpx.Limits(max_connections=12, max_keepalive_connections=6),
+            event_hooks={"response": [_refuse_private_redirect]},
         )
 
     def close(self) -> None:
@@ -191,7 +193,7 @@ class PoliteHttp:
         last: HttpResult | None = None
         for attempt in range(attempts):
             last = self._request(method, url, params=params, headers=headers)
-            retry = last.error is not None or last.status_code in RETRY_STATUSES
+            retry = _retryable(last)
             if not retry or attempt + 1 >= attempts:
                 return last
             self._sleep(attempt)
@@ -203,7 +205,7 @@ class PoliteHttp:
         last: HttpResult | None = None
         for attempt in range(attempts):
             last = self._stream_get(url)
-            retry = last.error is not None or last.status_code in RETRY_STATUSES
+            retry = _retryable(last)
             if not retry or attempt + 1 >= attempts:
                 return last
             self._sleep(attempt)
@@ -259,6 +261,31 @@ class PoliteHttp:
         delay = self.settings.http_backoff_seconds * (2**attempt)
         if delay > 0:
             time.sleep(delay)
+
+
+class BlockedRedirect(httpx.RequestError):
+    """A redirect pointed at a private, loopback, or link-local address."""
+
+
+def _refuse_private_redirect(response: httpx.Response) -> None:
+    """Callers check the URL they were given. This checks every hop after it.
+
+    Without it, a pasted link to a public host could redirect this process
+    to 127.0.0.1 (a local model server) or a cloud metadata address.
+    """
+    location = response.headers.get("location")
+    if not response.is_redirect or not location:
+        return
+    target = str(response.url.join(location))
+    problem = public_url_problem(target)
+    if problem:
+        raise BlockedRedirect(f"redirect refused: {problem}", request=response.request)
+
+
+def _retryable(result: HttpResult) -> bool:
+    if result.error is not None and result.error.startswith("BlockedRedirect"):
+        return False
+    return result.error is not None or result.status_code in RETRY_STATUSES
 
 
 def request_timeout(read_seconds: float) -> httpx.Timeout:
