@@ -53,11 +53,6 @@ only-include = ["src/verifai"]
 [tool.hatch.build.targets.wheel.sources]
 "src" = ""
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/verifai/web/templates" = "verifai/web/templates"
-"src/verifai/web/static" = "verifai/web/static"
-"src/verifai/bench/data/citations.jsonl" = "verifai/bench/data/citations.jsonl"
-
 [tool.mypy]
 python_version = "3.12"
 strict = true
@@ -125,6 +120,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "ARG001", "PLC0415", "PT018"]
+"api/index.py" = ["INP001"]  # Vercel runs this file directly
 "src/verifai/retrieval/pubmed.py" = ["S314"]
 # The benchmark seed shuffles a sample. It is not a secret.
 "src/verifai/bench/sampling.py" = ["S311"]
