@@ -176,3 +176,21 @@ Of the wrong FEVER verdicts, two disagree with the label more than with the worl
 A Google Fact Check key barely moves LIAR. Its statements are from 2007 to 2016, a matching review is rare, and a review is one source that still needs a second. The key helps most with recent viral claims, which this sample does not measure. The one LIAR verdict it enabled was wrong: PolitiFact rated the Syria chemical-weapons statement Mostly True, and VerifAI refuted it.
 
 Latency rose by about 3 s per check, because Wikidata now takes up to five requests a claim.
+
+### After the relevance rule (`855b694`, with a fact-check key)
+
+A stance now counts only when the source is about the claim: it names the claim's key terms, a research paper puts the claim's subject in its title or mentions it more than once, and the judge's reason does not say the source misses the topic.
+
+| | With key, before | With key, after |
+| --- | ---: | ---: |
+| Accuracy | 0.518 | 0.518 |
+| Abstention | 0.825 | 0.837 |
+| Correct when it answered | 23/29 | 22/27 |
+| General (FEVER) answered | 7 (4 right) | 5 (3 right) |
+| Health (SciFact) answered | 7 (5 right) | 7 (5 right) |
+| News (LIAR) answered | 1 (0 right) | 1 (0 right) |
+| Two-source blocks | 0.253 | 0.235 |
+| Citations | 16/16 | 16/16 |
+| Mean latency | 8.8 s | 8.4 s |
+
+The headline numbers barely move. What changes is the evidence behind a verdict: in the stress paste, an MMR-and-autism refutation no longer counts a heart-muscle paper, and smoking is no longer backed by a breast-cancer paper. Of the two FEVER verdicts lost, one was the Konidela claim, which VerifAI had refuted correctly against a not-enough-info label.
