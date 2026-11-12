@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     nli_model: str = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
     nli_enabled: bool = True
     max_claims: int = Field(default=5, ge=1, le=20)
+    # Public deployments. 0 turns a rate limit off, which suits a local install.
+    rate_limit_per_minute: int = Field(default=0, ge=0, le=10_000)
+    rate_limit_per_hour: int = Field(default=0, ge=0, le=100_000)
+    max_concurrent_checks: int = Field(default=4, ge=1, le=64)
+    check_queue_seconds: float = Field(default=20.0, ge=0, le=600)
+    # Proxies whose X-Forwarded-For is believed, comma separated, or * for any.
+    forwarded_allow_ips: str = "127.0.0.1"
 
     @property
     def max_body_bytes(self) -> int:
@@ -57,6 +64,11 @@ class Settings(BaseSettings):
     def user_agent(self) -> str:
         """Crossref's polite pool reads the mailto address from the User-Agent."""
         return f"VerifAI/{self.app_version} (mailto:{self.mailto})"
+
+    @property
+    def is_public(self) -> bool:
+        """Bound to an address other machines can reach."""
+        return self.host not in {"127.0.0.1", "localhost", "::1"}
 
     @property
     def mailto_is_placeholder(self) -> bool:

@@ -26,6 +26,7 @@ from verifai.models.judge import build_judge
 from verifai.web.limits import BodySizeLimitMiddleware
 from verifai.web.request_id import RequestIdMiddleware, request_id_from_scope
 from verifai.web.routes import STATIC_DIR, build_web_router
+from verifai.web.throttle import CheckSlots, RateLimiter
 
 log = logging.getLogger(__name__)
 
@@ -91,6 +92,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         summary="Self-hosted claim checks. Verdicts come from retrieved records.",
         lifespan=lifespan,
     )
+    app.state.rate_limiter = RateLimiter(
+        per_minute=settings.rate_limit_per_minute,
+        per_hour=settings.rate_limit_per_hour,
+    )
+    app.state.check_slots = CheckSlots(
+        settings.max_concurrent_checks, wait_seconds=settings.check_queue_seconds
+    )
+    if settings.is_public and not app.state.rate_limiter.enabled:
+        log.warning(
+            "VerifAI is listening on %s with no rate limit. Set "
+            "VERIFAI_RATE_LIMIT_PER_MINUTE before strangers can reach it.",
+            settings.host,
+        )
     app.include_router(build_web_router())
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
@@ -106,7 +120,14 @@ app = create_app()
 def run() -> None:
     configure_logging()
     settings = get_settings()
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
+    uvicorn.run(
+        app,
+        host=settings.host,
+        port=settings.port,
+        log_level="info",
+        proxy_headers=True,
+        forwarded_allow_ips=settings.forwarded_allow_ips,
+    )
 
 
 if __name__ == "__main__":

@@ -234,8 +234,15 @@ Matching uses RapidFuzz on normalized titles (case, accents, and punctuation fol
 | `VERIFAI_NLI_MODEL` | `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` | Entailment model. MiniCheck-style ids are accepted. |
 | `VERIFAI_NLI_ENABLED` | `true` | When false, `auto` skips NLI even if `transformers` is installed. |
 | `VERIFAI_MAX_CLAIMS` | `5` | How many extracted claims are checked per paste. |
+| `VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR` | `0`, `0` | Checks allowed per client address. `0` is off. Turn both on for a public link. |
+| `VERIFAI_MAX_CONCURRENT_CHECKS`, `VERIFAI_CHECK_QUEUE_SECONDS` | `4`, `20` | Checks that run at once, and how long another waits before a 503. |
+| `VERIFAI_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxies whose `X-Forwarded-For` is trusted. See `docs/deploy.md`. |
 
 The process User-Agent looks like `VerifAI/0.2.0 (mailto:you@example.com)`.
+
+## Public link
+
+VerifAI runs on localhost by default. Before you share it, turn on the per-client rate limits (`VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR`) and the concurrency cap. [docs/deploy.md](docs/deploy.md) covers a Cloudflare tunnel from your Mac, a Linux server with Ollama and Caddy, and what does and does not work on Vercel.
 
 ## Tests and CI
 

@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from verifai.orchestrate import CheckBundle, run_check
 from verifai.sample import EXAMPLE_TEXT
 from verifai.schemas import CheckRequest, CheckResponse, clean_paste, source_label
+from verifai.web.throttle import Throttled
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +70,8 @@ def build_web_router() -> APIRouter:
                 context["verdict"] = bundle.verdict
                 context["confidence"] = bundle.confidence
                 context["explanation"] = bundle.explanation
+            except Throttled as refused:
+                context["error"] = refused.message
             except Exception:
                 log.exception("citation check failed")
                 context["error"] = (
@@ -78,13 +81,23 @@ def build_web_router() -> APIRouter:
             return _render(request, "results.html", context)
         return _render(request, "index.html", context)
 
-    @router.post("/api/v1/check", response_model=CheckResponse)
-    def check_api(request: Request, payload: CheckRequest) -> CheckResponse:
+    @router.post(
+        "/api/v1/check",
+        response_model=CheckResponse,
+        responses={429: {"description": "Rate limited"}, 503: {"description": "Busy"}},
+    )
+    def check_api(request: Request, payload: CheckRequest) -> CheckResponse | JSONResponse:
         error, cleaned = _validate(payload.text, request.app.state.settings.max_text_chars)
         if error:
             raise HTTPException(status_code=422, detail=error)
         try:
             bundle = _run(request, cleaned)
+        except Throttled as refused:
+            return JSONResponse(
+                status_code=refused.status,
+                content={"detail": refused.message},
+                headers={"Retry-After": str(refused.retry_after)},
+            )
         except Exception as exc:
             log.exception("citation check failed")
             raise HTTPException(
@@ -113,11 +126,11 @@ def build_web_router() -> APIRouter:
 
 
 def _run(request: Request, text: str) -> CheckBundle:
-    return run_check(
-        request.app.state.router,
-        text,
-        limit=request.app.state.settings.max_claims,
-    )
+    state = request.app.state
+    client = request.client.host if request.client else "unknown"
+    state.rate_limiter.admit(client)
+    with state.check_slots.hold():
+        return run_check(state.router, text, limit=state.settings.max_claims)
 
 
 def _provider_names(request: Request) -> list[str]:
