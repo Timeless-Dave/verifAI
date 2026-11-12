@@ -177,6 +177,14 @@ class HostedJudge(GenerativeJudge):
             if self.base_url and api_key
             else None
         )
+        if complete is not None and "qwen3" in model.casefold():
+            # Qwen3 reasons before it answers unless told not to, and the
+            # reasoning can use up the reply. "/no_think" is its own switch.
+            inner = complete
+
+            def complete(prompt: str) -> str:
+                return inner(f"{prompt}\n/no_think")
+
         super().__init__("hosted", complete)
 
 

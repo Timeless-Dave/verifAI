@@ -68,7 +68,9 @@ class Settings(BaseSettings):
     # public site can judge claims with no machine of its own. Cloudflare
     # Workers AI: https://api.cloudflare.com/client/v4/accounts/<id>/ai/v1
     hosted_base_url: str = ""
-    hosted_model: str = "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
+    # Qwen3 30B (3B active): 7 of 7 on the judge's trap cases, about 0.7 s
+    # each, and the cheapest per judgment on Workers AI.
+    hosted_model: str = "@cf/qwen/qwen3-30b-a3b-fp8"
     hosted_api_key: str = ""
 
     @property

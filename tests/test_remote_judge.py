@@ -112,3 +112,16 @@ def test_hosted_judge_sends_the_key_and_reads_json() -> None:
         assert sent.headers["authorization"] == "Bearer key123"
         assert b'"max_tokens"' in sent.content
     assert HostedJudge(base, "m", "").available() is False
+
+
+def test_qwen3_is_asked_not_to_think() -> None:
+    from verifai.models.judge import HostedJudge
+
+    with respx.mock() as router:
+        route = router.post("https://h.example/v1/chat/completions").mock(
+            return_value=httpx.Response(
+                200, json={"choices": [{"message": {"content": '{"stance":"neutral"}'}}]}
+            )
+        )
+        HostedJudge("https://h.example/v1", "@cf/qwen/qwen3-30b-a3b-fp8", "k").judge("c", "p")
+        assert b"/no_think" in route.calls[0].request.content
