@@ -186,7 +186,14 @@ def decide_doi(citation: ExtractedCitation, outcomes: list[ProviderOutcome]) -> 
     mismatches: list[str] = []
     if citation.title and primary.title:
         assessment = assess(_query(citation), primary)
-        if assessment is None:
+        if assessment is None and _shortened(citation.title, primary.title):
+            # "Ileal-lymphoid-nodular hyperplasia" for the full Wakefield
+            # title is the same paper, cited short. Compare the rest.
+            details = _detail_mismatches(citation, primary)
+            if details:
+                status = CitationStatus.PARTIALLY_MATCHES
+                mismatches.extend(details)
+        elif assessment is None:
             # A real DOI, but registered to another paper: a miscitation,
             # stronger than a wrong year or venue.
             status = CitationStatus.WRONG_WORK
@@ -350,6 +357,15 @@ _BOOK_WORD = re.compile(r"[^\W\d_]{4,}")
 _NOT_TITLE = frozenset(
     {"isbn", "press", "edition", "publishing", "publishers", "books", "university"}
 )
+
+
+def _shortened(cited: str, title: str) -> bool:
+    """Every word of the cited title is in the record's title: a short form of it."""
+    words = [word.casefold() for word in re.findall(r"[^\W_]{3,}", cited)]
+    if len(" ".join(words)) < 12:
+        return False
+    whole = {word.casefold() for word in re.findall(r"[^\W_]{3,}", title)}
+    return all(word in whole for word in words)
 
 
 def _names_same_book(context: str | None, title: str | None) -> bool:

@@ -191,8 +191,15 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         # A list of references with one per line must not be read as one, or
         # every DOI takes the first line's title and year.
         crowded = sum(1 for other, _ in dois if line_start <= other.start() < line_end) > 1
-        if crowded:
-            raw_line = _original_line_at(text, normalized, match) or raw_line
+        original = _original_line_at(text, normalized, match)
+        # A whole reference on its own pasted line is that reference. Only a
+        # line that is the tail of a wrapped entry needs the lines before it.
+        if original and (crowded or _parse_bibliographic(original).get("title")):
+            raw_line = original
+            # Own only that line, so the reference above it is still found.
+            at = normalized.find(" ".join(original.split())[:60], line_start, line_end)
+            if at != -1 and line_start <= at <= match.start():
+                line_start, line_end = at, max(match.end(), at + len(" ".join(original.split())))
         meta = _parse_bibliographic(raw_line)
         raw = match.group(0) if doi.startswith("10.48550/arXiv.") else (raw_line or doi)
         title = meta.get("title")
@@ -257,10 +264,10 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
 
     for match in _ISBN_RE.finditer(normalized):
         isbn = re.sub(r"[-\s]", "", match.group(1)).upper()
-        line_start = normalized.rfind("\n", 0, match.start()) + 1
-        line_end = normalized.find("\n", match.end())
-        line = normalized[line_start : line_end if line_end != -1 else len(normalized)]
-        context = " ".join(line.replace(match.group(0), " ").split()).strip(" .,;:()[]-")
+        line = _original_line_at(text, normalized, match) or match.group(0)
+        context = " ".join(line.replace(match.group(0), " ").split())
+        context = re.sub(r"\bISBN(?:-1[03])?:?\s*[\dXx][\d\s-]{8,}", " ", context)
+        context = " ".join(context.split()).strip(" .,;:()[]-")
         found.append(
             ExtractedCitation(
                 kind="isbn",

@@ -232,3 +232,31 @@ def test_a_record_with_fewer_authors_is_short_not_wrong() -> None:
 
 def test_refutes_stance_keeps_its_meaning() -> None:
     assert Stance.REFUTES.value == "refutes"
+
+
+def test_a_shortened_title_is_the_same_paper() -> None:
+    from verifai.experts.citation.decide import _shortened
+
+    full = (
+        "Ileal-lymphoid-nodular hyperplasia, non-specific colitis, and pervasive "
+        "developmental disorder in children"
+    )
+    assert _shortened("Ileal-lymphoid-nodular hyperplasia", full)
+    assert not _shortened("Quantum entanglement in sourdough starters", "Deep learning")
+    assert not _shortened("Deep", "Deep learning")
+
+
+def test_a_reference_above_a_doi_line_is_still_its_own_citation() -> None:
+    found = extract_citations(
+        "Krizhevsky, A., Sutskever, I., & Hinton, G. E. (2012). ImageNet classification with "
+        "deep convolutional neural networks. Advances in Neural Information Processing "
+        "Systems, 25.\n"
+        "Wakefield AJ et al. (1998). Ileal-lymphoid-nodular hyperplasia. The Lancet. "
+        "doi:10.1016/S0140-6736(97)11096-0\n"
+        "Cormen, T. H. et al. Introduction to Algorithms. MIT Press. ISBN 978-0-262-03384-8"
+    )
+    kinds = [(item.kind, item.surnames[:1]) for item in found]
+    assert ("reference", ["Krizhevsky"]) in kinds
+    assert ("doi", ["Wakefield"]) in kinds
+    isbn = next(item for item in found if item.kind == "isbn")
+    assert isbn.context == "Cormen, T. H. et al. Introduction to Algorithms. MIT Press"
