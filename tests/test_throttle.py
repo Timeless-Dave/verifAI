@@ -140,3 +140,32 @@ def test_run_trusts_only_the_configured_proxies(monkeypatch: pytest.MonkeyPatch)
     run()
     assert seen["proxy_headers"] is True
     assert seen["forwarded_allow_ips"] == "172.17.0.1"
+
+
+def test_a_platform_ip_header_is_used_only_when_configured(http_mock: respx.MockRouter) -> None:
+    install(http_mock)
+    trusting = create_app(make_settings(rate_limit_per_minute=1, client_ip_header="x-real-ip"))
+    with TestClient(trusting) as client:
+        body = {"text": "10.1038/nature14539"}
+        assert (
+            client.post("/api/v1/check", json=body, headers={"x-real-ip": "1.1.1.1"}).status_code
+            == 200
+        )
+        assert (
+            client.post("/api/v1/check", json=body, headers={"x-real-ip": "2.2.2.2"}).status_code
+            == 200
+        )
+        assert (
+            client.post("/api/v1/check", json=body, headers={"x-real-ip": "1.1.1.1"}).status_code
+            == 429
+        )
+    ignoring = create_app(make_settings(rate_limit_per_minute=1))
+    with TestClient(ignoring) as client:
+        assert (
+            client.post("/api/v1/check", json=body, headers={"x-real-ip": "3.3.3.3"}).status_code
+            == 200
+        )
+        assert (
+            client.post("/api/v1/check", json=body, headers={"x-real-ip": "4.4.4.4"}).status_code
+            == 429
+        )

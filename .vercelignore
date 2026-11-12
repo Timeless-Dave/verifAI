@@ -1,0 +1,14 @@
+.venv
+.cache
+results
+tests
+extension
+docs
+.github
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+.claude
+.git

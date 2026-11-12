@@ -242,7 +242,7 @@ The process User-Agent looks like `VerifAI/0.3.0 (mailto:you@example.com)`.
 
 ## Public link
 
-VerifAI runs on localhost by default. Before you share it, turn on the per-client rate limits (`VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR`) and the concurrency cap. [docs/deploy.md](docs/deploy.md) covers a Cloudflare tunnel from your Mac, a Linux server with Ollama and Caddy, and what does and does not work on Vercel.
+A public demo runs at https://useverifai.vercel.app. It checks citations fully; with no model there, claims list their sources and stay unverified. VerifAI runs on localhost by default. Before you share your own, turn on the per-client rate limits (`VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR`) and the concurrency cap. [docs/deploy.md](docs/deploy.md) covers a Cloudflare tunnel from your Mac, a Linux server with Ollama and Caddy, and what does and does not work on Vercel.
 
 ## Tests and CI
 

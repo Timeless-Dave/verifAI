@@ -11,6 +11,7 @@ test("the manifest is version 3 for Chrome and Firefox", function () {
   assert.equal(manifest.background.service_worker, "src/background.js");
   assert.equal(manifest.browser_specific_settings.gecko.id, "verifai@localhost");
   assert.ok(manifest.host_permissions.includes("http://127.0.0.1/*"));
+  assert.ok(manifest.host_permissions.includes("https://useverifai.vercel.app/*"));
   assert.deepEqual(manifest.optional_host_permissions, ["https://*/*", "http://*/*"]);
   assert.equal(manifest.host_permissions.includes("<all_urls>"), false);
   assert.deepEqual(manifest.content_scripts[0].js, [

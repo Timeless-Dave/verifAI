@@ -2,8 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { DEFAULT_SERVER, normalizeServer } = require("../src/config.js");
 
-test("the default server is the local VerifAI port", function () {
-  assert.equal(DEFAULT_SERVER, "http://127.0.0.1:8741");
+test("the default server is the public VerifAI server", function () {
+  assert.equal(DEFAULT_SERVER, "https://useverifai.vercel.app");
   assert.equal(normalizeServer(""), DEFAULT_SERVER);
   assert.equal(normalizeServer("   "), DEFAULT_SERVER);
 });
@@ -22,6 +22,7 @@ test("only servers other than localhost need a permission prompt", function () {
   assert.equal(needsPermission("http://127.0.0.1:8741"), false);
   assert.equal(needsPermission("http://localhost:8741"), false);
   assert.equal(needsPermission("https://verifai.example"), true);
+  assert.equal(needsPermission("https://useverifai.vercel.app"), false);
   assert.equal(originPattern("https://verifai.example"), "https://verifai.example/*");
 });
 

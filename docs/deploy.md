@@ -110,19 +110,38 @@ sudo systemctl enable --now verifai
 sudo systemctl reload caddy
 ```
 
-## Vercel and other serverless hosts
+## Vercel
 
-A serverless function cannot run the local model: there is no GPU, and the weights are far larger than a function bundle. Two setups can still work:
+The public demo, https://useverifai.vercel.app, runs this way. `api/index.py` is the entry point and `vercel.json` sends every path to it. Vercel installs the project from `pyproject.toml` and `uv.lock`, without the model extras.
 
-- **No model.** Set `VERIFAI_MODEL_BACKEND=none`. The citation checker works fully, and it scored 16 of 16 in the v0.2.0 and v0.3.0 benchmarks. Claims list their sources and stay unverified.
-- **The model elsewhere.** Point `VERIFAI_OLLAMA_BASE_URL` at an Ollama server that the function can reach. That server is Option B without Caddy in front of VerifAI, and it needs its own protection, because Ollama has no authentication.
+A serverless function cannot run the local model: there is no GPU, and the weights are far larger than a function. So the demo sets `VERIFAI_MODEL_BACKEND=none`. The citation checker works fully. Claims list their sources and stay unverified. To have claims judged as well, point `VERIFAI_OLLAMA_BASE_URL` and `VERIFAI_MODEL_BACKEND=ollama` at an Ollama server the function can reach, and protect that server, because Ollama has no authentication.
 
-On serverless, the in-process limits above do not hold: each instance counts on its own, and instances come and go. Use the host's own rate-limit rules in front of the app. The repository does not include a Vercel configuration yet, and this setup has not been tested.
+Environment variables for the project (`vercel env add NAME production`):
+
+| Variable | Value |
+| --- | --- |
+| `VERIFAI_MAILTO` | an address you read |
+| `VERIFAI_MODEL_BACKEND` | `none` |
+| `VERIFAI_NLI_ENABLED` | `false` |
+| `VERIFAI_RATE_LIMIT_PER_MINUTE` | `5` |
+| `VERIFAI_RATE_LIMIT_PER_HOUR` | `40` |
+| `VERIFAI_CLIENT_IP_HEADER` | `x-real-ip` |
+
+Vercel sets `x-real-ip` to the visitor's address, and a visitor cannot override it. `VERIFAI_CLIENT_IP_HEADER` tells the rate limiter to trust it. Do not set it on a server where visitors reach VerifAI directly, because there anyone can send that header.
+
+Each function instance keeps its own counts, and instances come and go, so the in-app limit is softer on Vercel than on one long-running server. For a hard limit, add a rate-limit rule in the project's Vercel Firewall as well.
+
+```bash
+vercel link --project useverifai
+vercel deploy --prod
+```
+
+`.vercelignore` keeps `.env` and other local files out of the upload.
 
 ## The browser extension
 
-The extension's default server is `http://127.0.0.1:8741`, the app on the same computer. To use a public server, open the extension's options, paste the server's https address, and save. The browser asks once for permission to reach that address. Nothing else on the web is granted: `optional_host_permissions` lets the extension ask, and it asks only for the server you saved.
+The extension's default server is https://useverifai.vercel.app, which `host_permissions` already allows. To have claims judged by a local model, set the server to `http://127.0.0.1:8741` in the extension's options. To use another public server, paste its https address there and save. The browser asks once for permission to reach that address. Nothing else on the web is granted: `optional_host_permissions` lets the extension ask, and it asks only for the server you saved.
 
 When a public server refuses a check, the panel shows the server's reason, for example its rate limit.
 
-Before you publish the extension for one public server, make that address the default in `extension/src/config.js` and add it to `host_permissions`, so a new user does not have to paste it. A quick-tunnel address changes every time the tunnel restarts, so wait for a named tunnel or a domain.
+A fork that runs its own public server changes both places: `DEFAULT_SERVER` in `extension/src/config.js` and `host_permissions` in `extension/manifest.json`. Use an address that does not change. A quick-tunnel address changes every time the tunnel restarts.

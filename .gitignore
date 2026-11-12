@@ -14,3 +14,4 @@ htmlcov/
 .cache/
 results/*
 !results/README.md
+.vercel

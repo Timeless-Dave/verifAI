@@ -131,10 +131,19 @@ def build_web_router() -> APIRouter:
 
 def _run(request: Request, text: str) -> CheckBundle:
     state = request.app.state
-    client = request.client.host if request.client else "unknown"
+    client = _client_address(request)
     state.rate_limiter.admit(client)
     with state.check_slots.hold():
         return run_check(state.router, text, limit=state.settings.max_claims)
+
+
+def _client_address(request: Request) -> str:
+    header = request.app.state.settings.client_ip_header
+    if header:
+        value = request.headers.get(header, "").split(",")[0].strip()
+        if value:
+            return value
+    return request.client.host if request.client else "unknown"
 
 
 def _provider_names(request: Request) -> list[str]:

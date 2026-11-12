@@ -4,7 +4,11 @@
   "version": "0.3.0",
   "description": "Check claims on news, health, and chatbot pages against a VerifAI server: your own, or a public one you choose.",
   "permissions": ["storage"],
-  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "host_permissions": [
+    "https://useverifai.vercel.app/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": {
     "service_worker": "src/background.js"

@@ -15,10 +15,11 @@
 <body>
   <main>
     <h1>VerifAI server</h1>
-    <p>The extension only talks to this address. The default is the VerifAI app on this computer. For a public VerifAI server, paste its https address. The browser asks once for permission to reach it.</p>
+    <p>The extension only talks to this address. The default, https://useverifai.vercel.app, checks citations fully. It has no AI model, so claims list their sources and stay unverified.</p>
+    <p>If VerifAI runs on this computer, use http://127.0.0.1:8741 to have claims judged too. For another server, paste its https address; the browser asks once for permission to reach it.</p>
     <form id="server-form">
       <label for="server">Server URL</label>
-      <input id="server" name="server" type="url" required value="http://127.0.0.1:8741">
+      <input id="server" name="server" type="url" required value="https://useverifai.vercel.app">
       <button type="submit">Save</button>
     </form>
     <p id="status" role="status"></p>

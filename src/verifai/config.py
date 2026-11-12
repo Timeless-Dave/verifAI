@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     check_queue_seconds: float = Field(default=20.0, ge=0, le=600)
     # Proxies whose X-Forwarded-For is believed, comma separated, or * for any.
     forwarded_allow_ips: str = "127.0.0.1"
+    # A header the hosting platform sets to the visitor's address and that
+    # visitors cannot forge, such as Vercel's x-real-ip. Empty means unused.
+    client_ip_header: str = ""
 
     @property
     def max_body_bytes(self) -> int:

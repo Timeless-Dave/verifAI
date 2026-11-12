@@ -6,7 +6,11 @@
     root.VerifaiConfig = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  const DEFAULT_SERVER = "http://127.0.0.1:8741";
+  // The public server checks citations fully. It has no local model, so
+  // claims list their sources and stay unverified. A VerifAI running on this
+  // computer (LOCAL_SERVER) also judges claims.
+  const DEFAULT_SERVER = "https://useverifai.vercel.app";
+  const LOCAL_SERVER = "http://127.0.0.1:8741";
 
   function normalizeServer(value) {
     if (typeof value !== "string" || value.trim() === "") {
@@ -30,7 +34,7 @@
   // The manifest grants localhost. Any other server is asked for when saved.
   function needsPermission(origin) {
     const host = new URL(origin).hostname;
-    return host !== "127.0.0.1" && host !== "localhost";
+    return host !== "127.0.0.1" && host !== "localhost" && origin !== DEFAULT_SERVER;
   }
 
   function originPattern(origin) {
@@ -54,5 +58,12 @@
     return detail || "VerifAI returned " + status + ".";
   }
 
-  return { DEFAULT_SERVER, normalizeServer, needsPermission, originPattern, errorMessage };
+  return {
+    DEFAULT_SERVER,
+    LOCAL_SERVER,
+    normalizeServer,
+    needsPermission,
+    originPattern,
+    errorMessage,
+  };
 });
