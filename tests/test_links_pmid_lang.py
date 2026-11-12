@@ -133,3 +133,12 @@ def test_claims_are_searched_in_their_own_language() -> None:
         assert "eiffel" in str(french.calls[0].request.url).casefold()
     finally:
         http.close()
+
+
+def test_non_latin_scripts_pick_their_wikipedia() -> None:
+    from verifai.retrieval.textutil import search_terms_for
+
+    assert detect_language("长城位于中国。") == "zh"
+    assert detect_language("富士山は日本で一番高い山です。") == "ja"
+    assert detect_language("القاهرة هي عاصمة مصر.") == "ar"
+    assert search_terms_for("长城位于中国。", "zh") == ["长城位于中国"]

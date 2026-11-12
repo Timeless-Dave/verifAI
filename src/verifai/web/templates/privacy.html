@@ -3,11 +3,12 @@
 {% block body %}
 <article class="prose">
   <h1>Privacy</h1>
-  <p>This page covers the VerifAI website and the VerifAI browser extension. Last updated 12 November 2026.</p>
+  <p>This page covers the VerifAI website and the VerifAI browser extension. Last updated 13 November 2026.</p>
   <h2>What is sent</h2>
   <ul>
     <li>The text you paste, or that you ask the extension to check, is sent to the VerifAI server you use. The default server is https://useverifai.vercel.app. You can point the extension at a VerifAI server on your own computer instead.</li>
     <li>To check that text, the server sends short pieces of it, such as DOIs, titles, links, and search terms, to public sources: Crossref, OpenAlex, DataCite, doi.org, PubMed, Europe PMC, Open Library, Wikipedia, Wikidata, GDELT, the Wayback Machine, and, when configured, Google Fact Check.</li>
+    <li>To judge whether a source supports a claim, the public site sends the claim and short passages from the sources to an open-weights AI model run by Cloudflare Workers AI. Cloudflare states that it does not use this data to train models. VerifAI running on your own computer judges claims locally and sends nothing to an AI service.</li>
     <li>Your IP address reaches the server, as it does with any website. It is used only to limit how many checks one address can run.</li>
   </ul>
   <h2>What is kept</h2>
@@ -19,7 +20,7 @@
   <h2>What is never done</h2>
   <ul>
     <li>Your text is not sold, shared for advertising, or used to train models.</li>
-    <li>No commercial AI service receives your text.</li>
+    <li>No AI model's memory decides a verdict. The model only reads sources retrieved for that check, and a verdict still needs two independent sources.</li>
   </ul>
   <h2>Contact</h2>
   <p>Open an issue at <a href="https://github.com/Timeless-Dave/verifAI/issues">github.com/Timeless-Dave/verifAI</a>.</p>

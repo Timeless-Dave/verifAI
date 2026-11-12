@@ -2,7 +2,7 @@
 
 VerifAI is a self-hosted tool that checks claims for everyday people. Paste a sentence, a chatbot answer, or a link. A router sends each claim to the checker that fits it, and the page shows one verdict, a confidence, a plain-language explanation, and every source as a link.
 
-A verdict is computed from records retrieved at check time. It is never taken from a language model’s memory, and VerifAI does not call a commercial model API (no OpenAI, Anthropic, Gemini, or similar). Optional local models (MLX, Ollama, llama.cpp, or a small NLI model) only judge passages that were just retrieved. Free public data APIs supply the evidence.
+A verdict is computed from records retrieved at check time. It is never taken from a language model’s memory. A model only judges passages that were just retrieved: locally on your machine (MLX, Ollama, llama.cpp, or a small NLI model), or, on the public demo, an open-weights model on Cloudflare Workers AI. Self-hosted, VerifAI calls no AI service at all. Free public data APIs supply the evidence.
 
 The citation checker is still here. It answers a narrower question: does this DOI, URL, or bibliographic reference correspond to a real work or page, and do the authors, year, and venue printed next to it agree with that record? It does not read the paper. The other experts ask whether retrieved evidence supports or contradicts the claim itself.
 
@@ -242,7 +242,7 @@ The process User-Agent looks like `VerifAI/0.3.0 (mailto:you@example.com)`.
 
 ## Public link
 
-A public demo runs at https://useverifai.vercel.app. It checks citations fully; with no model there, claims list their sources and stay unverified. VerifAI runs on localhost by default. Before you share your own, turn on the per-client rate limits (`VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR`) and the concurrency cap. [docs/deploy.md](docs/deploy.md) covers a Cloudflare tunnel from your Mac, a Linux server with Ollama and Caddy, and what does and does not work on Vercel.
+A public demo runs at https://useverifai.vercel.app. It checks citations, and judges claims with an open-weights model on Cloudflare Workers AI (`VERIFAI_MODEL_BACKEND=hosted`). VerifAI runs on localhost by default. Before you share your own, turn on the per-client rate limits (`VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR`) and the concurrency cap. [docs/deploy.md](docs/deploy.md) covers a Cloudflare tunnel from your Mac, a Linux server with Ollama and Caddy, and what does and does not work on Vercel.
 
 ## Tests and CI
 

@@ -147,12 +147,14 @@ class WikidataRetriever:
     def __init__(self, http: PoliteHttp, *, limit: int = _MAX_ITEMS) -> None:
         self.http = http
         self.limit = limit
+        self._claim = ""
 
     def retrieve(self, query: str) -> RetrievalResult:
         text = " ".join((query or "").split())[:400]
         if not text:
             return RetrievalResult(self.name)
         lang = detect_language(text)
+        self._claim = text
         ids: list[str] = []
         failed = 0
         names = entity_names(text)[: self.limit]
@@ -188,17 +190,31 @@ class WikidataRetriever:
                 "uselang": lang,
                 "strictlanguage": 0,
                 "format": "json",
-                "limit": 1,
+                "limit": 3,
                 "type": "item",
             },
             source=self.name,
         )
         if body is None:
             return None, False
-        search = body.get("search")
-        if not isinstance(search, list) or not search or not isinstance(search[0], dict):
+        hits = [hit for hit in (body.get("search") or []) if isinstance(hit, dict)]
+        if not hits:
             return None, True
-        found = search[0].get("id")
+        # Several items share a name. Prefer the one whose description fits
+        # the claim: the professor, not the basketball player.
+        context = set(re.findall(r"[^\W\d_]{4,}", self._claim.casefold()))
+        best = max(
+            hits,
+            key=lambda hit: len(
+                context
+                & set(re.findall(r"[^\W\d_]{4,}", str(hit.get("description") or "").casefold()))
+            ),
+        )
+        if not context & set(
+            re.findall(r"[^\W\d_]{4,}", str(best.get("description") or "").casefold())
+        ):
+            best = hits[0]
+        found = best.get("id")
         return (found if isinstance(found, str) else None), True
 
     def _entities(self, ids: list[str], lang: str, *, props: str) -> dict[str, Any] | None:

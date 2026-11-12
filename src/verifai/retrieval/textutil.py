@@ -396,8 +396,20 @@ _MARKERS: dict[str, frozenset[str]] = {
 _TOKEN = re.compile(r"[^\W\d_]+", re.UNICODE)
 
 
+def _share(letters: list[str], pattern: str) -> float:
+    return sum(1 for char in letters if re.match(pattern, char)) / len(letters)
+
+
 def detect_language(text: str) -> str:
     """A Wikipedia language code for ``text``. English unless another clearly wins."""
+    letters = [char for char in text or "" if char.isalpha()]
+    if letters:
+        if _share(letters, r"[\u3040-\u30ff]") > 0.05:
+            return "ja"  # kana means Japanese even beside kanji
+        if _share(letters, r"[\u4e00-\u9fff]") > 0.3:
+            return "zh"
+        if _share(letters, r"[\u0600-\u06ff]") > 0.3:
+            return "ar"
     words = [word.casefold() for word in _TOKEN.findall(text or "")]
     scores = {lang: sum(word in markers for word in words) for lang, markers in _MARKERS.items()}
     best = max(scores, key=lambda lang: (scores[lang], lang == "en"))
@@ -410,6 +422,9 @@ def search_terms_for(text: str, lang: str, *, limit: int = 8) -> list[str]:
     """Search terms with that language's function words removed."""
     if lang == "en":
         return search_terms(text, limit=limit)
+    if lang in {"zh", "ja"}:
+        # No spaces between words; the search engine segments the sentence.
+        return [re.sub(r"[。．！？、,.!?\s]+", " ", text).strip()][:1]
     stop = _MARKERS.get(lang, frozenset())
     terms: list[str] = []
     for word in _TOKEN.findall(text or ""):
