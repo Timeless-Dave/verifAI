@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import platform
+import time
 from collections.abc import Callable
 from typing import Any, Protocol, cast
 
@@ -170,6 +171,92 @@ class LlamaCppJudge(GenerativeJudge):
         super().__init__("llamacpp", _llamacpp_complete(self.base_url, model, client))
 
 
+class RemoteJudge:
+    """The model of another VerifAI, reached over HTTPS with a shared token.
+
+    The lender may be a laptop that sleeps. Whether it is up is checked at
+    most every few seconds, and an unreachable lender makes this judge
+    unavailable, so claims say "not judged" instead of failing.
+    """
+
+    name = "remote"
+
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        *,
+        client: httpx.Client | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.token = token
+        self._client = client
+        self._clock = clock
+        self._checked_at: float | None = None
+        self._up = False
+
+    def available(self) -> bool:
+        if not self.base_url or not self.token:
+            return False
+        now = self._clock()
+        ttl = 30.0 if self._up else 10.0
+        if self._checked_at is None or now - self._checked_at > ttl:
+            self._up = self._probe()
+            self._checked_at = now
+        return self._up
+
+    def judge(self, claim: str, passage: str) -> Judgment:
+        if not self.available():
+            return Judgment(Stance.NEUTRAL, 0.0, "The model host could not be reached.")
+        try:
+            response = self._http().post(
+                f"{self.base_url}/api/v1/judge",
+                json={"claim": claim[:600], "passage": passage[:3500]},
+                headers=self._headers(),
+                timeout=httpx.Timeout(45.0, connect=5.0),
+            )
+            response.raise_for_status()
+            body = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            self._up = False
+            self._checked_at = self._clock()
+            return Judgment(
+                Stance.NEUTRAL, 0.0, f"The model host did not answer ({type(exc).__name__})."
+            )
+        stance = {item.value: item for item in Stance}.get(str(body.get("stance")), Stance.NEUTRAL)
+        confidence = body.get("confidence")
+        return Judgment(
+            stance,
+            float(confidence) if isinstance(confidence, (int, float)) else 0.0,
+            str(body.get("explanation") or "")[:400],
+        )
+
+    def _probe(self) -> bool:
+        try:
+            response = self._http().get(
+                f"{self.base_url}/api/v1/judge",
+                headers=self._headers(),
+                timeout=httpx.Timeout(4.0, connect=3.0),
+            )
+        except httpx.HTTPError:
+            return False
+        if response.status_code != 200:
+            return False
+        try:
+            return bool(response.json().get("ready"))
+        except ValueError:
+            return False
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}"}
+
+    def _http(self) -> httpx.Client:
+        if self._client is None:
+            self._client = httpx.Client(follow_redirects=False)
+        return self._client
+
+
 class AutoJudge:
     """Prefer NLI for entailment, then MLX, then Ollama, then llama.cpp."""
 
@@ -218,6 +305,8 @@ def build_judge(settings: Settings) -> Judge:
         return OllamaJudge(settings.ollama_base_url, settings.ollama_model)
     if backend == "llamacpp":
         return LlamaCppJudge(settings.llamacpp_base_url, settings.llamacpp_model)
+    if backend == "remote":
+        return RemoteJudge(settings.remote_judge_url, settings.judge_token)
     return AutoJudge(settings)
 
 

@@ -138,6 +138,28 @@ vercel deploy --prod
 
 `.vercelignore` keeps `.env` and other local files out of the upload.
 
+## Lend your Mac's model to the public site
+
+Vercel cannot run a model, but it can borrow one. A VerifAI with a model answers `POST /api/v1/judge` when `VERIFAI_JUDGE_TOKEN` is set, and only to callers that send that token. The public site uses it through `VERIFAI_MODEL_BACKEND=remote`. When the Mac is asleep or off, the site checks whether it is reachable at most every few seconds, falls back to citations only, and says claims were not judged.
+
+On the Mac:
+
+```bash
+# .env: VERIFAI_JUDGE_TOKEN=<a long random secret>
+scripts/macos/verifai-agent.sh install   # starts VerifAI at login, restarts it if it stops
+```
+
+The Mac also needs a public HTTPS address that does not change, for example Tailscale Funnel or a Cloudflare named tunnel on your own domain. Then, on Vercel:
+
+| Variable | Value |
+| --- | --- |
+| `VERIFAI_MODEL_BACKEND` | `remote` |
+| `VERIFAI_REMOTE_JUDGE_URL` | the Mac's public address |
+| `VERIFAI_JUDGE_TOKEN` | the same secret |
+| `VERIFAI_MAX_CLAIMS` | `3`, so a batch fits Vercel's 60-second limit |
+
+Judging is one passage at a time on the Mac, in order, because MLX cannot run two at once.
+
 ## The browser extension
 
 The extension's default server is https://useverifai.vercel.app, which `host_permissions` already allows. To have claims judged by a local model, set the server to `http://127.0.0.1:8741` in the extension's options. To use another public server, paste its https address there and save. The browser asks once for permission to reach that address. Nothing else on the web is granted: `optional_host_permissions` lets the extension ask, and it asks only for the server you saved.

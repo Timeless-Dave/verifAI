@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
 
 from verifai.orchestrate import CheckBundle, run_check
 from verifai.sample import EXAMPLE_TEXT
@@ -156,6 +159,35 @@ def build_web_router() -> APIRouter:
         context["skipped"] = list(bundle.claims_skipped)
         return _render(request, "more.html", context)
 
+    @router.get("/api/v1/judge", include_in_schema=False)
+    def judge_ready(
+        request: Request, authorization: Annotated[str, Header()] = ""
+    ) -> dict[str, Any]:
+        """Lets another VerifAI ask whether this one can lend its model."""
+        _require_judge_token(request, authorization)
+        judge = request.app.state.judge
+        return {"ready": judge.available(), "model": judge.name}
+
+    @router.post("/api/v1/judge", include_in_schema=False)
+    def judge_passage(
+        request: Request,
+        payload: JudgeRequest,
+        authorization: Annotated[str, Header()] = "",
+    ) -> dict[str, Any]:
+        """Judge one passage against one claim with this machine's model."""
+        _require_judge_token(request, authorization)
+        judge = request.app.state.judge
+        if not judge.available():
+            raise HTTPException(status_code=503, detail="No model is loaded here.")
+        # One model, one answer at a time. MLX is not safe to call in parallel.
+        with _JUDGE_LOCK:
+            result = judge.judge(payload.claim, payload.passage)
+        return {
+            "stance": result.stance.value,
+            "confidence": result.confidence,
+            "explanation": result.explanation,
+        }
+
     @router.get("/health")
     def health(request: Request) -> dict[str, Any]:
         judge = request.app.state.judge
@@ -176,6 +208,23 @@ def _run(request: Request, text: str) -> CheckBundle:
     state.rate_limiter.admit(client)
     with state.check_slots.hold():
         return run_check(state.router, text, limit=state.settings.max_claims)
+
+
+_JUDGE_LOCK = threading.Lock()
+
+
+class JudgeRequest(BaseModel):
+    claim: str = Field(min_length=1, max_length=600)
+    passage: str = Field(min_length=1, max_length=4000)
+
+
+def _require_judge_token(request: Request, authorization: str) -> None:
+    expected = request.app.state.settings.judge_token
+    if not expected:
+        raise HTTPException(status_code=404, detail="Not found")
+    supplied = authorization.removeprefix("Bearer ").strip()
+    if not hmac.compare_digest(supplied.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="A valid judge token is required.")
 
 
 def _client_address(request: Request) -> str:

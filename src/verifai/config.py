@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     openalex_api_key: str | None = None
     semantic_scholar_api_key: str | None = None
     google_factcheck_api_key: str | None = None
-    model_backend: Literal["auto", "mlx", "ollama", "llamacpp", "nli", "none"] = "auto"
+    model_backend: Literal["auto", "mlx", "ollama", "llamacpp", "nli", "remote", "none"] = "auto"
     mlx_model: str = "mlx-community/Qwen3.5-9B-4bit"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:9b"
@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # A header the hosting platform sets to the visitor's address and that
     # visitors cannot forge, such as Vercel's x-real-ip. Empty means unused.
     client_ip_header: str = ""
+    # A VerifAI that has a model lends it to one that has none, such as the
+    # Vercel demo borrowing the model on a Mac. The lender sets judge_token;
+    # the borrower sets remote_judge_url, the same token, and backend "remote".
+    judge_token: str = ""
+    remote_judge_url: str = ""
 
     @property
     def max_body_bytes(self) -> int:
