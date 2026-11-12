@@ -12,7 +12,7 @@ from verifai.http import PoliteHttp
 
 _URL = re.compile(r"https?://[^\s<>\"']+")
 _YEAR = re.compile(r"(?:18|19|20)\d{2}")
-_WORD = re.compile(r"[A-Za-z][A-Za-z0-9'-]{3,}")
+_WORD = re.compile(r"[^\W\d_][\w'-]{3,}")
 _STOP = frozenset(
     [
         "that",
@@ -194,3 +194,160 @@ def fetch_json(
 def host_family(url: str) -> str:
     host = (urlsplit(url).hostname or "page").lower().removeprefix("www.")
     return f"page:{host}"
+
+
+# Common function words. Enough to tell which Wikipedia to search, not a
+# general language detector.
+_MARKERS: dict[str, frozenset[str]] = {
+    "en": frozenset(
+        [
+            "the",
+            "is",
+            "are",
+            "was",
+            "were",
+            "of",
+            "and",
+            "to",
+            "in",
+            "a",
+            "an",
+            "that",
+            "it",
+            "on",
+            "for",
+            "with",
+        ]
+    ),
+    "fr": frozenset(
+        [
+            "le",
+            "la",
+            "les",
+            "des",
+            "est",
+            "une",
+            "un",
+            "se",
+            "du",
+            "et",
+            "au",
+            "aux",
+            "sont",
+            "dans",
+            "pour",
+            "qui",
+            "pas",
+            "ne",
+            "à",
+        ]
+    ),
+    "es": frozenset(
+        [
+            "el",
+            "la",
+            "los",
+            "las",
+            "es",
+            "del",
+            "al",
+            "una",
+            "un",
+            "y",
+            "en",
+            "se",
+            "que",
+            "por",
+            "son",
+            "con",
+            "no",
+            "está",
+        ]
+    ),
+    "de": frozenset(
+        [
+            "der",
+            "die",
+            "das",
+            "ist",
+            "und",
+            "ein",
+            "eine",
+            "nicht",
+            "mit",
+            "von",
+            "auf",
+            "den",
+            "dem",
+            "im",
+            "zu",
+            "sich",
+        ]
+    ),
+    "it": frozenset(
+        [
+            "il",
+            "lo",
+            "gli",
+            "è",
+            "della",
+            "che",
+            "una",
+            "per",
+            "sono",
+            "nel",
+            "del",
+            "di",
+            "un",
+            "non",
+            "si",
+        ]
+    ),
+    "pt": frozenset(
+        [
+            "o",
+            "os",
+            "as",
+            "é",
+            "da",
+            "do",
+            "uma",
+            "um",
+            "não",
+            "em",
+            "que",
+            "são",
+            "na",
+            "no",
+            "se",
+            "com",
+        ]
+    ),
+}
+_TOKEN = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+
+def detect_language(text: str) -> str:
+    """A Wikipedia language code for ``text``. English unless another clearly wins."""
+    words = [word.casefold() for word in _TOKEN.findall(text or "")]
+    scores = {lang: sum(word in markers for word in words) for lang, markers in _MARKERS.items()}
+    best = max(scores, key=lambda lang: (scores[lang], lang == "en"))
+    if best != "en" and scores[best] >= 2 and scores[best] > scores["en"]:
+        return best
+    return "en"
+
+
+def search_terms_for(text: str, lang: str, *, limit: int = 8) -> list[str]:
+    """Search terms with that language's function words removed."""
+    if lang == "en":
+        return search_terms(text, limit=limit)
+    stop = _MARKERS.get(lang, frozenset())
+    terms: list[str] = []
+    for word in _TOKEN.findall(text or ""):
+        folded = word.casefold()
+        if len(folded) < 3 or folded in stop or folded in terms:
+            continue
+        terms.append(folded)
+        if len(terms) >= limit:
+            break
+    return terms

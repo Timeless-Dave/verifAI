@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from verifai.http import PoliteHttp
-from verifai.retrieval.textutil import fetch_json
+from verifai.retrieval.textutil import detect_language, fetch_json
 from verifai.retrieval.types import Passage, RetrievalResult
 
 _API = "https://www.wikidata.org/w/api.php"
@@ -28,7 +28,9 @@ class WikidataRetriever:
             {
                 "action": "wbsearchentities",
                 "search": text,
-                "language": "en",
+                "language": detect_language(text),
+                "uselang": detect_language(text),
+                "strictlanguage": 0,
                 "format": "json",
                 "limit": self.limit,
                 "type": "item",

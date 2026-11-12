@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from verifai.http import PoliteHttp
-from verifai.retrieval.textutil import fetch_json, search_terms
+from verifai.retrieval.textutil import detect_language, fetch_json, search_terms_for
 from verifai.retrieval.types import Passage, RetrievalResult
 
-_API = "https://en.wikipedia.org/w/api.php"
+
+def _api(lang: str) -> str:
+    return f"https://{lang}.wikipedia.org/w/api.php"
 
 
 class WikipediaRetriever:
@@ -19,12 +21,15 @@ class WikipediaRetriever:
         self.limit = limit
 
     def retrieve(self, query: str) -> RetrievalResult:
-        terms = " ".join(search_terms(query, limit=10)) or query.strip()[:200]
+        # A French claim is searched on French Wikipedia. It is still one
+        # encyclopedia, so every language edition is the same family.
+        lang = detect_language(query)
+        terms = " ".join(search_terms_for(query, lang, limit=10)) or query.strip()[:200]
         if not terms:
             return RetrievalResult(self.name)
         body, error = fetch_json(
             self.http,
-            _API,
+            _api(lang),
             {
                 "action": "query",
                 "list": "search",
@@ -40,16 +45,16 @@ class WikipediaRetriever:
         hits = _search_hits(body)[: self.limit]
         if not hits:
             return RetrievalResult(self.name)
-        passages = self._extracts(hits)
+        passages = self._extracts(hits, lang)
         return RetrievalResult(self.name, passages=passages)
 
-    def _extracts(self, hits: list[dict[str, Any]]) -> list[Passage]:
+    def _extracts(self, hits: list[dict[str, Any]], lang: str = "en") -> list[Passage]:
         pageids = "|".join(str(hit["pageid"]) for hit in hits if hit.get("pageid"))
         pages: dict[str, Any] = {}
         if pageids:
             body, _error = fetch_json(
                 self.http,
-                _API,
+                _api(lang),
                 {
                     "action": "query",
                     "prop": "extracts|info",
@@ -77,7 +82,7 @@ class WikipediaRetriever:
             title = str(hit.get("title") or "Wikipedia")
             url = page.get("fullurl") if isinstance(page, dict) else None
             if not isinstance(url, str):
-                url = "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")
+                url = f"https://{lang}.wikipedia.org/wiki/" + title.replace(" ", "_")
             passages.append(
                 Passage(
                     source=self.name,
