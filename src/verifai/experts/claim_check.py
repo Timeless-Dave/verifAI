@@ -198,6 +198,7 @@ _GENERIC = frozenset(
         "false",
     ]
 )
+_LITERATURE = frozenset({"pubmed", "europepmc"})
 _NOT_ABOUT = re.compile(
     r"\b(?:does not|doesn't|do not|did not|never|no)\s+(?:\w+\s+){0,2}"
     r"(?:mention|address|discuss|refer to|relate to|concern|cover|examine|study|test)",
@@ -239,6 +240,10 @@ def on_topic(claim: str, passage: Passage) -> bool:
         stem = re.escape(term[:5] if len(term) > 5 else term)
         return bool(re.search(rf"\b{stem}", title)) or len(re.findall(rf"\b{stem}", haystack)) >= 2
 
+    # Only for research papers: an encyclopedia item for "the 2016 election"
+    # rightly answers a claim about who won it without naming the claimant.
+    if passage.family not in _LITERATURE:
+        return True
     return not subject or any(central(term) for term in subject)
 
 

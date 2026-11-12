@@ -115,3 +115,23 @@ def test_repeated_citations_are_counted() -> None:
 
 def test_lowercase_subjects_are_looked_up() -> None:
     assert entity_names("The speed of light is approximately 300,000 km/h.") == ["speed of light"]
+
+
+def test_an_encyclopedia_item_need_not_name_the_claimant() -> None:
+    claim = "Joe Biden won the 2016 U.S. presidential election."
+    election = Passage(
+        source="wikidata",
+        family="wikidata",
+        title="2016 United States presidential election",
+        url=None,
+        text="2016 United States presidential election. successful candidate: Donald Trump.",
+    )
+    assert on_topic(claim, election)
+    paper = Passage(
+        source="pubmed",
+        family="pubmed",
+        title="[Salt and cancer]",
+        url=None,
+        text="Salt intake raises cancer risk. Smoking is a confounder.",
+    )
+    assert not on_topic("Smoking cigarettes greatly increases the risk of lung cancer.", paper)
