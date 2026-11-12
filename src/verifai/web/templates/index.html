@@ -3,21 +3,28 @@
 {% block title %}VerifAI · the fact-checking, done for you{% endblock %}
 {% block body %}
 <section class="hero">
-  <h1>Check it before you share it.</h1>
-  <p class="lede">Checking something properly means a dozen open tabs: Wikipedia, the research databases, what fact-checkers said, every reference looked up. VerifAI does that legwork for you in under a minute, then shows you what holds up and links every source it read.</p>
-  <p class="legwork"><span class="legwork-label">Done for you</span>
-    <span>{{ icon("i-check") }}Searches Wikipedia and Wikidata</span>
-    <span>{{ icon("i-check") }}Reads PubMed and Europe PMC</span>
-    <span>{{ icon("i-check") }}Finds fact-checkers' verdicts</span>
-    <span>{{ icon("i-check") }}Looks up every DOI, PMID, and ISBN</span>
-    <span>{{ icon("i-check") }}Catches retractions</span>
-    <span>{{ icon("i-check") }}Reads claims in other languages</span>
-  </p>
-  <ol class="promises">
-    <li><span class="num">01</span><span>Never takes one source's word: a verdict needs two independent sources that agree</span></li>
-    <li><span class="num">02</span><span>Flags made-up, retracted, and mis-cited papers</span></li>
-    <li><span class="num">03</span><span>Shows its work: every source linked, so you can read it yourself</span></li>
-  </ol>
+  <div class="hero-copy">
+    <h1>Check it before you share it.</h1>
+    <p class="lede">Paste anything. VerifAI reads the sources for you.</p>
+    <ul class="chips">
+      <li>{{ icon("i-scale") }}Two sources, or no verdict</li>
+      <li>{{ icon("i-ban") }}Fake papers caught</li>
+      <li>{{ icon("i-link") }}Every source linked</li>
+    </ul>
+  </div>
+  <figure class="desk" role="img" aria-label="Example: the claim that the Great Wall of China is visible from the Moon is checked against four sources and refuted by two independent ones.">
+    <p class="desk-claim">“The Great Wall of China is visible from the Moon.”</p>
+    <ol class="desk-sources" aria-hidden="true">
+      <li style="--i:0"><span class="desk-src">{{ icon("i-book") }}Wikipedia</span><span class="pip tone-critical">{{ icon("i-cross") }}</span></li>
+      <li style="--i:1"><span class="desk-src">{{ icon("i-search") }}Fact-checkers</span><span class="pip tone-critical">{{ icon("i-cross") }}</span></li>
+      <li style="--i:2"><span class="desk-src">{{ icon("i-grid") }}Wikidata</span><span class="pip tone-neutral">{{ icon("i-question") }}</span></li>
+      <li style="--i:3"><span class="desk-src">{{ icon("i-flask") }}PubMed</span><span class="pip tone-neutral">{{ icon("i-question") }}</span></li>
+    </ol>
+    <div class="desk-verdict" aria-hidden="true">
+      <span class="stamp tone-critical">{{ icon("i-cross") }}Refuted</span>
+      <span class="desk-note">2 independent sources agree</span>
+    </div>
+  </figure>
 </section>
 
 {% if mailto_is_placeholder %}
@@ -42,17 +49,18 @@
   {% endif %}
 </div>
 
-<section class="explain">
-  <details>
-    <summary>{{ icon("i-chevron", "icon chevron") }}How it works</summary>
-    <ol class="steps">
-      <li><strong>Citations.</strong> Each DOI, arXiv id, PMID, ISBN, link, and reference is looked up in Crossref, OpenAlex, DataCite, PubMed, and Open Library. Retractions come from Retraction Watch through Crossref.</li>
-      <li><strong>Claims.</strong> Health claims go to PubMed, Europe PMC, Wikipedia, and fact-checkers. News goes to fact-checkers, GDELT, and Wikipedia current events. Everything else uses Wikipedia, Wikidata, fact-checkers, and pages you pasted. A claim in another language is translated so English sources can be searched too, and the translation is shown.</li>
-      <li><strong>Reading.</strong> An AI model reads each passage beside the claim and says whether it supports it, contradicts it, or is not about it. It only judges what was just retrieved; nothing comes from its memory.</li>
-      <li><strong>Two sources.</strong> A claim is supported or refuted only when two independent sources agree. The same paper in two indexes counts once, and one website counts once however many pages it returns.</li>
-      <li><strong>Keep going if one is down.</strong> A missing source lowers confidence. It never silently becomes the whole verdict.</li>
+<section class="how" aria-labelledby="how-h">
+  <h2 id="how-h" class="how-title">How it works</h2>
+    <ol class="flow">
+      <li><span class="flow-icon">{{ icon("i-clip") }}</span><b>Paste</b><span>Claims, links, DOIs, references, in any language.</span></li>
+      <li><span class="flow-icon">{{ icon("i-search") }}</span><b>Search</b><span>Wikipedia, Wikidata, PubMed, fact-checkers, Crossref, OpenAlex, live. It keeps going if one is down.</span></li>
+      <li><span class="flow-icon">{{ icon("i-scale") }}</span><b>Weigh</b><span>Each passage is read beside the claim. A verdict needs two independent sources.</span></li>
+      <li><span class="flow-icon flow-stamp">{{ icon("i-check") }}</span><b>Verdict</b><span>Supported, refuted, or unverified, with every source linked.</span></li>
     </ol>
-  </details>
+</section>
+
+<section class="explain">
+
   <details>
     <summary>{{ icon("i-chevron", "icon chevron") }}What the labels mean</summary>
     <dl class="labels">
