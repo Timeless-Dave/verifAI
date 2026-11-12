@@ -10,6 +10,7 @@ record outranks a later reprint of the same title.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from verifai.experts.citation.extract import ExtractedCitation
@@ -186,7 +187,9 @@ def decide_doi(citation: ExtractedCitation, outcomes: list[ProviderOutcome]) -> 
     if citation.title and primary.title:
         assessment = assess(_query(citation), primary)
         if assessment is None:
-            status = CitationStatus.PARTIALLY_MATCHES
+            # A real DOI, but registered to another paper: a miscitation,
+            # stronger than a wrong year or venue.
+            status = CitationStatus.WRONG_WORK
             mismatches.append(
                 f"The DOI is registered to “{primary.title}” ({_byline(primary)}), "
                 f"which does not match the cited title “{citation.title}”."
@@ -207,7 +210,8 @@ def decide_doi(citation: ExtractedCitation, outcomes: list[ProviderOutcome]) -> 
         if canonical_doi(other.doi) and canonical_doi(other.doi) == canonical_doi(primary.doi):
             continue
         if title_scores(primary.title, other.title).blend < 0.60:
-            status = CitationStatus.PARTIALLY_MATCHES
+            if status is CitationStatus.VERIFIED:
+                status = CitationStatus.PARTIALLY_MATCHES
             mismatches.append(
                 f"{source_label(primary.source)} and {source_label(other.source)} "
                 "disagree about what this DOI refers to."
@@ -291,6 +295,39 @@ def decide_isbn(citation: ExtractedCitation, outcome: ProviderOutcome | None) ->
             unavailable=[],
         )
     record = outcome.records[0]
+    if not record.authors:
+        # Anyone can add an Open Library edition. One with no author, often
+        # spam, cannot confirm a book.
+        return _result(
+            citation,
+            status=CitationStatus.UNREACHABLE,
+            confidence=CONF_ISBN_MISSING,
+            explanation=(
+                f"Open Library's only record for ISBN {isbn} is titled “{record.title}” and "
+                "names no author, so it cannot confirm which book this is. Check the ISBN "
+                "against the publisher or a library catalogue."
+            ),
+            consulted=consulted,
+            contributed=consulted,
+            unavailable=[],
+        )
+    if not _names_same_book(citation.context, record.title):
+        return _result(
+            citation,
+            status=CitationStatus.PARTIALLY_MATCHES,
+            confidence=CONF_ISBN_FOUND,
+            explanation=(
+                f"ISBN {isbn} is a real number, but Open Library lists it as “{record.title}”, "
+                "not the book named beside it. The ISBN may belong to a different book."
+            ),
+            consulted=consulted,
+            contributed=consulted,
+            unavailable=[],
+            evidence=_evidence([record], None),
+            links=_links([record]),
+            matched=record,
+            mismatches=[f"This ISBN belongs to “{record.title}”"],
+        )
     return _result(
         citation,
         status=CitationStatus.VERIFIED,
@@ -307,6 +344,25 @@ def decide_isbn(citation: ExtractedCitation, outcome: ProviderOutcome | None) ->
         links=_links([record]),
         matched=record,
     )
+
+
+_BOOK_WORD = re.compile(r"[^\W\d_]{4,}")
+_NOT_TITLE = frozenset(
+    {"isbn", "press", "edition", "publishing", "publishers", "books", "university"}
+)
+
+
+def _names_same_book(context: str | None, title: str | None) -> bool:
+    """True unless the text clearly names a different book than the record.
+
+    A bare ISBN names nothing, so it cannot disagree. Otherwise one shared
+    title word is enough: "Cormen. Introduction to Algorithms. MIT Press."
+    shares "introduction" and "algorithms" with the record.
+    """
+    words = {word.casefold() for word in _BOOK_WORD.findall(context or "")} - _NOT_TITLE
+    if len(words) < 2 or not title:
+        return True
+    return bool(words & {word.casefold() for word in _BOOK_WORD.findall(title)})
 
 
 def decide_invalid(citation: ExtractedCitation) -> CitationResult:

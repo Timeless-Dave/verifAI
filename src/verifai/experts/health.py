@@ -14,6 +14,7 @@ from verifai.retrieval.europepmc import EuropePMCRetriever
 from verifai.retrieval.google_factcheck import GoogleFactCheckRetriever
 from verifai.retrieval.pubmed import PubMedRetriever
 from verifai.retrieval.types import Retriever
+from verifai.retrieval.wikipedia import WikipediaRetriever
 from verifai.schemas import ExpertResult
 
 
@@ -21,8 +22,8 @@ class HealthExpert:
     name = "health"
     description = (
         "Checks a health or science claim against PubMed and Europe PMC, "
-        "preferring systematic reviews, and Google Fact Check when it is "
-        "configured. This is not medical advice."
+        "preferring systematic reviews, plus Wikipedia and Google Fact Check "
+        "when it is configured. This is not medical advice."
     )
 
     def __init__(
@@ -56,6 +57,9 @@ def build_health_expert(http: PoliteHttp, settings: Settings, judge: Judge) -> H
     retrievers: list[Retriever] = [
         PubMedRetriever(http, email=settings.mailto),
         EuropePMCRetriever(http),
+        # An encyclopedia covers the dangerous myths ("bleach cures COVID")
+        # that no study tests, and it is independent of the literature.
+        WikipediaRetriever(http),
     ]
     # Health myths ("vaccines cause autism") are what fact-checkers review
     # most. Their reviews still count as one source, beside the literature.

@@ -2,7 +2,7 @@
 {% if error %}
 <div class="notice tone-warning" role="alert">{{ icon("i-alert") }}<p>{{ error }}</p></div>
 {% elif results is not none and results|length == 0 %}
-<div class="notice" role="status">{{ icon("i-question") }}<p>No checker is registered for this paste yet.</p></div>
+<div class="notice" role="status">{{ icon("i-question") }}<p>{% if explanation and "opinion" in explanation %}{{ explanation }}{% else %}Nothing checkable was found. Paste a sentence that states a fact, a reference, a DOI, or a link.{% endif %}</p></div>
 {% elif view %}
 <section class="summary" aria-live="polite">
   <div class="summary-head">
@@ -25,6 +25,7 @@
     <div class="stat{% if view.citation_problems %} stat-alert{% endif %}"><dt>Need attention</dt><dd>{{ view.citation_problems }}</dd></div>
     {% endif %}
   </dl>
+  <p id="claims-progress" class="batch-note" role="status">{% if view.skipped %}<span class="spinner" aria-hidden="true"></span>Checking {{ view.skipped|length }} more {{ "claim" if view.skipped|length == 1 else "claims" }}. They appear below as they finish.{% endif %}</p>
   <div class="bars">
     {% if view.claim_bar %}{{ segbar(view.claim_bar) }}{% endif %}
     {% if view.citation_bar %}{{ segbar(view.citation_bar) }}{% endif %}
@@ -47,7 +48,7 @@
 
 {% if view.claims %}
 <section class="group" aria-labelledby="claims-h">
-  <h2 id="claims-h" class="group-title">The claims <span class="count">{{ view.claims|length }} checked</span></h2>
+  <h2 id="claims-h" class="group-title">The claims <span id="claims-count" class="count">{{ view.claims|length }} checked{% if view.skipped %} of {{ view.claims_found }}{% endif %}</span></h2>
   {% for card in view.claims %}{{ claim_entry(card, loop.index) }}{% endfor %}
   {{ continue_block(view.skipped, view.claims|length, view.claims_found, view.claims|length) }}
 </section>

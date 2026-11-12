@@ -122,6 +122,7 @@ CITATION_BADGES = {
     CitationStatus.PARTIALLY_MATCHES: Badge("warning", "i-split", "Partial match"),
     CitationStatus.NOT_FOUND: Badge("critical", "i-cross", "Not found"),
     CitationStatus.INVALID: Badge("critical", "i-ban", "Invalid"),
+    CitationStatus.WRONG_WORK: Badge("critical", "i-cross", "Wrong paper"),
     CitationStatus.RETRACTED: Badge("serious", "i-alert", "Retracted"),
     CitationStatus.UNREACHABLE: Badge("neutral", "i-cloud", "Couldn't check"),
 }
@@ -132,11 +133,15 @@ KIND_LABELS = {
     "reference": "Reference",
     "isbn": "ISBN",
     "pmid": "PMID",
+    "pmc": "PMC",
 }
+_ARXIV = re.compile(r"\b(?:arxiv[:./]|10\.48550/arxiv\.)", re.IGNORECASE)
 EXPERT_LABELS = {"health": "Health", "news": "News", "general": "General", "citation": "Citations"}
+_SIDES = {"supports", "refutes"}
 _PROBLEMS = {
     CitationStatus.NOT_FOUND,
     CitationStatus.INVALID,
+    CitationStatus.WRONG_WORK,
     CitationStatus.RETRACTED,
     CitationStatus.PARTIALLY_MATCHES,
 }
@@ -156,8 +161,15 @@ def build_view(bundle: CheckBundle, *, judged: bool = True, text: str = "") -> P
     elif not resolved and citations:
         label = "Citation check confidence"
     pointers = dangling_markers(text) + unresolvable_mentions(text) if text else []
+    badge = VERDICT_BADGES[bundle.verdict]
+    # One supported claim beside two unverified ones is not a supported paste.
+    if bundle.combined and 0 < resolved < len(bundle.combined):
+        if bundle.verdict is Verdict.SUPPORTED:
+            badge = Badge("good", "i-check", "Partly supported")
+        elif bundle.verdict is Verdict.UNSUPPORTED:
+            badge = Badge("critical", "i-cross", "Partly refuted")
     return PageView(
-        badge=VERDICT_BADGES[bundle.verdict],
+        badge=badge,
         headline=_page_headline(bundle, citations, problems),
         confidence=confidence,
         confidence_label=label,
@@ -177,6 +189,15 @@ def build_view(bundle: CheckBundle, *, judged: bool = True, text: str = "") -> P
 
 
 def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
+    # The same article can come back from several checkers or reviews. Show
+    # it once, keeping the copy that took a side.
+    unique: dict[str, EvidenceItem] = {}
+    for item in claim.evidence:
+        key = item.url or f"{item.source}:{item.title}"
+        kept = unique.get(key)
+        if kept is None or (kept.stance not in _SIDES and item.stance in _SIDES):
+            unique[key] = item
+    claim = claim.model_copy(update={"evidence": list(unique.values())})
     support = _sources(claim.evidence, "supports")
     refute = _sources(claim.evidence, "refutes")
     unrelated = sum(1 for item in claim.evidence if item.stance not in {"supports", "refutes"})
@@ -192,6 +213,10 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
         flags.append("Cites a retracted paper")
     if "may be made up" in claim.explanation:
         flags.append("Cites a source that could not be found")
+    if claim.verdict is Verdict.UNVERIFIABLE and refute and not support:
+        flags.append("Every source that took a side contradicts it")
+    elif claim.verdict is Verdict.UNVERIFIABLE and support and not refute:
+        flags.append("Leans supported: one source so far")
     by_stance = {
         "supports": [item for item in claim.evidence if item.stance == "supports"],
         "refutes": [item for item in claim.evidence if item.stance == "refutes"],
@@ -263,7 +288,7 @@ def citation_card(item: CitationResult) -> CitationCard:
     raw = item.raw if len(item.raw) <= 220 else item.raw[:217].rstrip() + "…"
     return CitationCard(
         badge=CITATION_BADGES[item.status],
-        kind=KIND_LABELS.get(item.kind, item.kind.upper()),
+        kind="arXiv" if _ARXIV.search(item.raw) else KIND_LABELS.get(item.kind, item.kind.upper()),
         raw=raw,
         matched_title=item.matched_title,
         matched_meta=meta,
@@ -324,10 +349,10 @@ def _citation_bar(citations: list[CitationResult]) -> Bar | None:
         ("retracted", "Retracted", "serious", "i-alert", {CitationStatus.RETRACTED}),
         (
             "fake",
-            "Fake or invalid",
+            "Fake, invalid, or wrong paper",
             "critical",
             "i-cross",
-            {CitationStatus.NOT_FOUND, CitationStatus.INVALID},
+            {CitationStatus.NOT_FOUND, CitationStatus.INVALID, CitationStatus.WRONG_WORK},
         ),
         ("unchecked", "Couldn't check", "neutral", "i-cloud", {CitationStatus.UNREACHABLE}),
     )

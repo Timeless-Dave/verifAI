@@ -255,6 +255,9 @@ details.why > p { color: var(--ink-2); font-size: 16px; max-width: 70ch; }
 /* Continuation, notes, asides */
 .more { display: flex; align-items: center; gap: 12px; padding: 18px 0; border-bottom: 1px solid var(--rule-soft); font: 13px var(--mono); color: var(--ink-2); }
 .more .spinner { display: inline-block; color: var(--ink); }
+.batch-note { display: flex; gap: 10px; align-items: center; margin: 14px 0 0; font-size: 15px; color: var(--ink-2); }
+.batch-note:empty { display: none; }
+.batch-note .spinner { display: inline-block; color: var(--ink); }
 .more-paused { color: var(--ink); }
 .more-paused .ghost { margin-left: auto; }
 .note-model { margin-top: 16px; }

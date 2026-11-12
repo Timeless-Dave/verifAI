@@ -297,6 +297,7 @@ def _summarize(
             f"{counts[CitationStatus.NOT_FOUND]} not found, "
             f"{counts[CitationStatus.RETRACTED]} retracted, "
             f"{counts[CitationStatus.INVALID]} invalid, "
+            f"{counts[CitationStatus.WRONG_WORK]} pointing to a different paper, "
             f"{counts[CitationStatus.UNREACHABLE]} unreachable."
         )
     ]
@@ -339,7 +340,8 @@ def _summarize(
 def _verdict(counts: Counter[CitationStatus], total: int) -> tuple[Verdict, str]:
     if counts[CitationStatus.VERIFIED] == total:
         return Verdict.SUPPORTED, "Every citation matched a retrieved record."
-    if counts[CitationStatus.NOT_FOUND] + counts[CitationStatus.INVALID] == total:
+    wrong = counts[CitationStatus.INVALID] + counts[CitationStatus.WRONG_WORK]
+    if counts[CitationStatus.NOT_FOUND] + wrong == total:
         return Verdict.UNSUPPORTED, "None of the citations matched a retrieved record."
     if counts[CitationStatus.UNREACHABLE] == total:
         return (
@@ -348,10 +350,13 @@ def _verdict(counts: Counter[CitationStatus], total: int) -> tuple[Verdict, str]
         )
     if counts[CitationStatus.RETRACTED] == total:
         return Verdict.UNSUPPORTED, "Every citation points to a retracted work."
-    if counts[CitationStatus.NOT_FOUND] or counts[CitationStatus.INVALID]:
+    if counts[CitationStatus.NOT_FOUND] or wrong:
         return (
             Verdict.MIXED,
-            "At least one citation looks fabricated or could not be found.",
+            (
+                "At least one citation looks fabricated, points to a different paper, "
+                "or could not be found."
+            ),
         )
     if counts[CitationStatus.RETRACTED]:
         return Verdict.MIXED, "At least one citation points to a retracted work."

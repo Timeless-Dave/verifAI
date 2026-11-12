@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
-from verifai.claims import only_links, screen_paste, without_references
+from verifai.claims import only_links, opinions, screen_paste, without_references
 from verifai.corroboration import SourceVote, Stance, corroborate
 from verifai.experts.base import Expert
 from verifai.experts.claim_check import NOT_MEDICAL_ADVICE
@@ -52,6 +53,12 @@ def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
     references = _numbered_references(text)
     combined = [_with_citation_notes(claim, citations, references) for claim in combined]
     verdict, confidence, explanation = rollup(combined, results)
+    if not subjects and not ignored and (taste := opinions(text)):
+        quoted = "; ".join(f"“{item}”" for item in taste[:2])
+        explanation = (
+            f"That reads as opinion, not fact: {quoted}. Taste and belief cannot be "
+            "checked against sources, so no verdict is given."
+        )
     if len(subjects) > len(checked):
         explanation = (
             f"{explanation} Only the first {len(checked)} of {len(subjects)} claims found were "
@@ -74,6 +81,7 @@ _CITATION_WARNINGS = {
     CitationStatus.RETRACTED: "is retracted",
     CitationStatus.NOT_FOUND: "could not be found, so it may be made up",
     CitationStatus.INVALID: "is not a valid identifier",
+    CitationStatus.WRONG_WORK: "points to a different paper than the one named",
     CitationStatus.PARTIALLY_MATCHES: "does not match the record it points to",
 }
 
@@ -259,17 +267,23 @@ def _rollup_many(combined: list[CombinedClaim]) -> tuple[Verdict, float, str]:
     if decided_kinds == {Verdict.SUPPORTED}:
         return (
             Verdict.SUPPORTED,
-            min(claim.confidence for claim in decided),
+            _mean(claim.confidence for claim in decided),
             f"{len(decided)} of {len(combined)} claims are supported by agreeing sources.",
         )
     if decided_kinds == {Verdict.UNSUPPORTED}:
         return (
             Verdict.UNSUPPORTED,
-            min(claim.confidence for claim in decided),
+            _mean(claim.confidence for claim in decided),
             f"{len(decided)} of {len(combined)} claims are refuted by agreeing sources.",
         )
     return (
         Verdict.MIXED,
-        min(claim.confidence for claim in decided) if decided else 0.0,
+        _mean(claim.confidence for claim in decided) if decided else 0.0,
         "The claims do not all land on the same verdict.",
     )
+
+
+def _mean(values: Iterable[float]) -> float:
+    """The typical claim's confidence. The weakest one would sink eight sound ones."""
+    numbers = list(values)
+    return round(sum(numbers) / len(numbers), 2) if numbers else 0.0

@@ -38,6 +38,13 @@
       area.focus();
     });
   }
+  if (area) {
+    // An empty box never reaches the server. Clear the last results so the
+    // page does not look as if they answer the new, empty check.
+    area.addEventListener("invalid", function () {
+      notice("Paste some text first.");
+    });
+  }
   if (area && area.form) {
     area.addEventListener("keydown", function (event) {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -80,20 +87,40 @@
     resume.className = "ghost";
     resume.textContent = "Resume checking";
     form.append(label, resume);
+    var progress = document.getElementById("claims-progress");
+    if (progress) {
+      progress.textContent = "Paused. Resume at the end of the claims list.";
+    }
     if (window.htmx) {
       window.htmx.process(form);
     }
+  }
+
+  // What to tell someone who was rate limited: the server's own reason if
+  // it sent one, else its Retry-After, else the firewall's one-minute window.
+  function waitMessage(xhr) {
+    try {
+      var body = JSON.parse(xhr.responseText);
+      if (body && typeof body.detail === "string") {
+        return body.detail;
+      }
+    } catch (error) {
+      // Not JSON, for example the edge firewall's own page.
+    }
+    var after = parseInt(xhr.getResponseHeader("Retry-After") || "", 10);
+    var wait = after > 0 ? (after < 90 ? after + " seconds" : Math.ceil(after / 60) + " minutes") : "about a minute";
+    return "Too many checks from your network right now. Try again in " + wait + ".";
   }
 
   document.body.addEventListener("htmx:responseError", function (event) {
     var status = event.detail.xhr ? event.detail.xhr.status : 0;
     var form = event.detail.elt && event.detail.elt.closest ? event.detail.elt.closest("[data-more]") : null;
     if (form) {
-      pauseBatch(form, status === 429 ? "Paused: too many checks from your network. Wait a minute." : "Paused: the next batch could not finish.");
+      pauseBatch(form, status === 429 ? "Paused. " + waitMessage(event.detail.xhr) : "Paused: the next batch could not finish.");
       return;
     }
     if (status === 429) {
-      notice("Too many checks from your network right now. Wait a minute, then try again.");
+      notice(waitMessage(event.detail.xhr));
     } else if (status === 413) {
       notice("That paste is too long. Check a shorter piece at a time.");
     } else {

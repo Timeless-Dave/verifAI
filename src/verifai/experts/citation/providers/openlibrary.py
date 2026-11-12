@@ -31,11 +31,12 @@ class OpenLibraryProvider:
         publishers = body.get("publishers")
         venue = publishers[0] if isinstance(publishers, list) and publishers else None
         key = body.get("key") if isinstance(body.get("key"), str) else None
+        authors = self._authors(body)
         record = Record(
             source=self.name,
             title=body["title"],
-            authors=[],
-            surnames=[],
+            authors=authors,
+            surnames=[name.split()[-1] for name in authors if name.split()],
             year=year,
             years=[year] if year else [],
             venue=venue if isinstance(venue, str) else None,
@@ -44,6 +45,23 @@ class OpenLibraryProvider:
             record_id=isbn,
         )
         return ProviderOutcome(self.name, unavailable=False, records=[record])
+
+    def _authors(self, body: dict[str, object]) -> list[str]:
+        """The first author's name. Anyone can add an edition; a real one names who wrote it."""
+        by = body.get("by_statement")
+        listed = body.get("authors")
+        keys = [
+            entry["key"]
+            for entry in (listed if isinstance(listed, list) else [])
+            if isinstance(entry, dict) and isinstance(entry.get("key"), str)
+        ]
+        if not keys:
+            return [by.strip()] if isinstance(by, str) and by.strip() else []
+        result = self.http.get(f"https://openlibrary.org{keys[0]}.json")
+        author = result.json_body() if result.ok else None
+        name = author.get("name") if isinstance(author, dict) else None
+        # The edition lists an author even when that lookup fails.
+        return [name] if isinstance(name, str) and name.strip() else ["author on record"]
 
 
 def _year(value: object) -> int | None:

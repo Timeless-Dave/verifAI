@@ -72,6 +72,10 @@ def test_parse_judgment_reads_json_and_rejects_junk() -> None:
     assert low.stance is Stance.REFUTES
     assert low.confidence == 0.0
 
+    # A model that reports how likely the claim is true still means "surely false".
+    flipped = parse_judgment('{"stance":"refutes","confidence":0.05}')
+    assert flipped.confidence == 0.95
+
 
 def test_prompt_includes_the_claim_and_clips_it() -> None:
     prompt = judgment_prompt("claim " * 200, "evidence " * 2000)

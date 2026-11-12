@@ -91,7 +91,7 @@ def test_mixed_example_against_mocked_indexes(expert, http_mock):
     assert "wayback" in wiki.sources_consulted
 
 
-def test_real_doi_with_wrong_title_is_partial(expert, http_mock):
+def test_real_doi_with_wrong_title_is_the_wrong_paper(expert, http_mock):
     install(http_mock)
     text = (
         "Smith, J. & Doe, A. (2019). Quantum entanglement in household sourdough starters. "
@@ -101,8 +101,9 @@ def test_real_doi_with_wrong_title_is_partial(expert, http_mock):
     assert len(result.citations) == 1
     citation = result.citations[0]
     assert citation.kind == "doi"
-    assert citation.status == CitationStatus.PARTIALLY_MATCHES
+    assert citation.status == CitationStatus.WRONG_WORK
     assert any("does not match the cited title" in item for item in citation.mismatches)
+    assert result.verdict.value == "unsupported"
     assert citation.matched_title and "Endonuclease" in citation.matched_title
 
 

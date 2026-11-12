@@ -1,8 +1,11 @@
 {% from "_ui.html" import claim_entry, continue_block %}
 {% if paused %}
 {{ continue_block(skipped, offset, total, batch, paused) }}
+<p id="claims-progress" class="batch-note" role="status" hx-swap-oob="true">Paused with {{ total - offset }} {{ "claim" if total - offset == 1 else "claims" }} left. Resume at the end of the claims list.</p>
 {% else %}
 {% for card in cards %}{{ claim_entry(card, offset + loop.index) }}{% endfor %}
 {{ continue_block(skipped, offset + cards|length, total, batch) }}
 <span id="claims-done" hx-swap-oob="true">{{ offset + cards|length }}</span>
+<span id="claims-count" class="count" hx-swap-oob="true">{{ offset + cards|length }} checked{% if skipped %} of {{ total }}{% endif %}</span>
+<p id="claims-progress" class="batch-note" role="status" hx-swap-oob="true">{% if skipped %}<span class="spinner" aria-hidden="true"></span>Checking {{ total - offset - cards|length }} more {{ "claim" if total - offset - cards|length == 1 else "claims" }}. They appear below as they finish.{% endif %}</p>
 {% endif %}

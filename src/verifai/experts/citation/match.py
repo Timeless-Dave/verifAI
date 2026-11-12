@@ -137,6 +137,10 @@ def compare_authors(query: Query, record: Record) -> str:
         return "mismatch"
     if matched == len(cited) and first_ok:
         return "match"
+    # One index lists only Krizhevsky for AlexNet. A record whose few authors
+    # all appear in the citation, first author first, is short, not wrong.
+    if first_ok and len(recorded) < len(cited) and all(listed(name, cited) for name in recorded):
+        return "match"
     if matched == 0:
         return "mismatch"
     return "partial"

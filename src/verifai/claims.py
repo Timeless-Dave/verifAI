@@ -114,6 +114,12 @@ _META = re.compile(
 _OPINION = re.compile(
     r"\b(?:i|we)\s+(?:think|believe|feel)\b|\b(?:feel|feels|felt)\b|"
     r"\bin\s+my\s+(?:view|opinion)\b|\barguably\b|\b(?:elegant|beautiful|overrated|underrated)\b|"
+    # Taste, however firmly put: "Pizza is objectively the best food."
+    r"\bobjectively\b|"
+    r"\b(?:is|are|was|were)\s+(?:\w+\s+){0,2}(?:the\s+)?(?:best|worst|tastiest|coolest|"
+    r"nicest|greatest|most\s+(?:beautiful|delicious|boring|fun|amazing|overrated))\b"
+    r"(?![\s-]+(?:selling|known|documented|preserved|studied|paid|rated|performing))|"
+    r"\b(?:delicious|disgusting|awesome|terrible|boring|amazing|gorgeous|ugly)\b|"
     # A report of what others believe, not a claim the paste makes.
     r"\b(?:some|many|few|most)\s+(?:people|folks|critics|users|experts)\s+"
     r"(?:claim|say|believe|think|argue|insist)\b",
@@ -279,6 +285,15 @@ def _title_case(sentence: str) -> bool:
         return False
     capped = sum(1 for word in words if word[0].isupper())
     return capped / len(words) >= 0.8
+
+
+def opinions(text: str) -> list[str]:
+    """Sentences set aside because they state taste or belief, not fact."""
+    return [
+        sentence.strip()
+        for sentence in _SPLIT.split(" ".join(text.split()))
+        if sentence.strip() and _OPINION.search(sentence)
+    ][:5]
 
 
 def only_links(text: str) -> bool:

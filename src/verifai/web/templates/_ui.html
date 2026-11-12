@@ -41,9 +41,9 @@
   </div>
   {% endif %}
   <ul class="balance-legend">
-    <li><span class="dot tone-good">{{ icon("i-check") }}</span><b>{{ card.support }}</b> support</li>
+    <li><span class="dot tone-good">{{ icon("i-check") }}</span><b>{{ card.support }}</b> independent {{ "source" if card.support == 1 else "sources" }} support</li>
     <li><span class="dot tone-critical">{{ icon("i-cross") }}</span><b>{{ card.refute }}</b> contradict</li>
-    <li><span class="dot tone-neutral">{{ icon("i-question") }}</span><b>{{ card.unrelated }}</b> not about it</li>
+    <li><span class="dot tone-neutral">{{ icon("i-question") }}</span><b>{{ card.unrelated }}</b> {{ "result" if card.unrelated == 1 else "results" }} not about it</li>
   </ul>
 </div>
 {%- endmacro %}
@@ -64,8 +64,9 @@
     <details class="why">
       <summary>{{ icon("i-chevron", "icon chevron") }}{% if card.judged %}Why, and every source{% else %}The sources found{% endif %}</summary>
       <p>{{ card.explanation }}</p>
+      {% if card.judged and card.groups %}<p class="muted">Each result is listed below. The counts above are independent sources: several articles from one encyclopedia or one fact-check service count once.</p>{% endif %}
       {% for group in card.groups %}
-      {% if card.judged %}<h4 class="evidence-head"><span class="dot tone-{{ group.tone }}"></span>{{ group.label }} <span class="count">{{ group.items|length }}</span></h4>{% endif %}
+      {% if card.judged %}<h4 class="evidence-head"><span class="dot tone-{{ group.tone }}"></span>{{ group.label }} <span class="count">{{ group.items|length }} {{ "result" if group.items|length == 1 else "results" }}</span></h4>{% endif %}
       <ul class="evidence">
         {% for item in group.items %}
         <li>

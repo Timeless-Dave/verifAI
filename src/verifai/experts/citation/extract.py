@@ -51,6 +51,10 @@ _SURNAME_RE = re.compile(
     r"((?:(?:van|von|de|del|der|den|di|da|le|la)\s+){0,3}[A-Z][\w'’\-]+)\s*,\s*\S"
 )
 _ET_AL_RE = re.compile(r"\b([A-Z][\w'’\-]+)\s+et\s+al\.?", re.IGNORECASE)
+# Vancouver style: "Wakefield AJ, Murch SH" or "Wakefield AJ et al." The
+# capitals after the surname are initials, never a name.
+_VANCOUVER_NAME = re.compile(r"\b([A-Z][a-z][\w'’\-]*)\s+([A-Z]{1,3})\b(?=\s*(?:,|\.|et\s+al))")
+_INITIALS = re.compile(r"^[A-Z]{1,3}$")
 _BULLET_RE = re.compile(r"^(?:[-*•]+|\d+[.)]|\[\d+\])\s+")
 _DOI_HOSTS = {"doi.org", "dx.doi.org", "www.doi.org"}
 
@@ -137,6 +141,8 @@ class ExtractedCitation:
     occurrences: int = 1
     # Why the identifier cannot be real, decided before any lookup.
     problem: str | None = None
+    # The words on the identifier's line, for an ISBN: what the text says the book is.
+    context: str | None = None
 
 
 def extract_citations(text: str) -> list[ExtractedCitation]:
@@ -251,9 +257,18 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
 
     for match in _ISBN_RE.finditer(normalized):
         isbn = re.sub(r"[-\s]", "", match.group(1)).upper()
+        line_start = normalized.rfind("\n", 0, match.start()) + 1
+        line_end = normalized.find("\n", match.end())
+        line = normalized[line_start : line_end if line_end != -1 else len(normalized)]
+        context = " ".join(line.replace(match.group(0), " ").split()).strip(" .,;:()[]-")
         found.append(
             ExtractedCitation(
-                kind="isbn", raw=match.group(0), start=match.start(), end=match.end(), isbn=isbn
+                kind="isbn",
+                raw=match.group(0),
+                start=match.start(),
+                end=match.end(),
+                isbn=isbn,
+                context=context or None,
             )
         )
 
@@ -484,7 +499,9 @@ def _author_segment(prefix: str) -> str:
     if segment.casefold().rstrip(".") == "et al" and len(parts) >= 2:
         segment = parts[-2] + " et al."
     segment = _BULLET_RE.sub("", segment).strip(" \t:—–-")
-    surname = _SURNAME_RE.search(segment) or _ET_AL_RE.search(segment)
+    surname = (
+        _VANCOUVER_NAME.search(segment) or _SURNAME_RE.search(segment) or _ET_AL_RE.search(segment)
+    )
     if surname and surname.start() > 0:
         segment = segment[surname.start() :].strip()
     return segment
@@ -493,16 +510,23 @@ def _author_segment(prefix: str) -> str:
 def _surnames(text: str) -> tuple[list[str], bool]:
     et_al = bool(re.search(r"\bet\s+al\.?", text, flags=re.IGNORECASE))
     names: list[str] = []
+    vancouver = [
+        match.group(1)
+        for match in _VANCOUVER_NAME.finditer(text)
+        if match.group(1).casefold() not in _STOP_AUTHORS
+    ]
+    if vancouver:
+        return list(dict.fromkeys(vancouver)), et_al
     for match in _SURNAME_RE.finditer(text):
         surname = re.sub(r"\s+", " ", match.group(1)).strip()
-        if surname.casefold() in _STOP_AUTHORS:
+        if surname.casefold() in _STOP_AUTHORS or _INITIALS.match(surname):
             continue
         if surname not in names:
             names.append(surname)
     if not names:
         for match in _ET_AL_RE.finditer(text):
             surname = match.group(1)
-            if surname.casefold() in _STOP_AUTHORS:
+            if surname.casefold() in _STOP_AUTHORS or _INITIALS.match(surname):
                 continue
             if surname not in names:
                 names.append(surname)

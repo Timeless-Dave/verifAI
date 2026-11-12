@@ -57,6 +57,8 @@ class CitationStatus(str, Enum):
     UNREACHABLE = "unreachable"
     RETRACTED = "retracted"
     INVALID = "invalid"
+    # A live identifier registered to a different work than the one named.
+    WRONG_WORK = "wrong_work"
 
 
 VERDICT_LABELS = {
@@ -73,6 +75,7 @@ STATUS_LABELS = {
     CitationStatus.UNREACHABLE: "Unreachable",
     CitationStatus.RETRACTED: "Retracted",
     CitationStatus.INVALID: "Invalid",
+    CitationStatus.WRONG_WORK: "Wrong paper",
 }
 
 

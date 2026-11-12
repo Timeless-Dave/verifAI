@@ -130,15 +130,15 @@ def build_web_router() -> APIRouter:
     def check_more(
         request: Request,
         text: Annotated[str, Form()] = "",
-        offset: Annotated[int, Form()] = 0,
-        total: Annotated[int, Form()] = 0,
+        offset: Annotated[int, Form(ge=0, le=100_000)] = 0,
+        total: Annotated[int, Form(ge=0, le=100_000)] = 0,
     ) -> HTMLResponse:
         """The next batch of claims from a paste, appended where the last one ended."""
         settings = request.app.state.settings
         _, cleaned = _validate(text, settings.max_text_chars)
         claims = [line.strip() for line in cleaned.splitlines() if line.strip()]
         context: dict[str, Any] = {
-            "offset": max(0, offset),
+            "offset": offset,
             "total": max(total, offset + len(claims)),
             "batch": settings.max_claims,
             "skipped": claims,

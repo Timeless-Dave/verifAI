@@ -201,7 +201,15 @@ _GENERIC = frozenset(
 _LITERATURE = frozenset({"pubmed", "europepmc"})
 _NOT_ABOUT = re.compile(
     r"\b(?:does not|doesn't|do not|did not|never|no)\s+(?:\w+\s+){0,2}"
-    r"(?:mention|address|discuss|refer to|relate to|concern|cover|examine|study|test)",
+    r"(?:mention|address|discuss|refer to|relate to|concern|cover|examine|study|test)|"
+    r"\b(?:provides?|gives?|contains?|offers?|has|includes?)\s+no\s+(?:\w+\s+){0,2}"
+    r"(?:information|data|details?|mention)\b|"
+    r"\bno\s+(?:information|data|details?|mention)\s+(?:about|on|of|regarding)\b|"
+    r"\bonly\s+(?:describes|defines|explains|lists|discusses)\b|"
+    r"\b(?:is|are)\s+(?:not\s+relevant|irrelevant|unrelated)\b|"
+    r"\bsays\s+nothing\s+about\b|"
+    r"\b(?:is|are|refers? to|describes)\s+(?:about\s+)?(?:a|an|another)\s+(?:different|separate)\s+"
+    r"(?:person|place|thing|entity|campus|institution|university|subject|topic)\b",
     re.IGNORECASE,
 )
 
