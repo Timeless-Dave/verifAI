@@ -117,7 +117,7 @@ class CitationResult(BaseModel):
     """Status of a single extracted citation."""
 
     raw: str
-    kind: Literal["doi", "url", "reference", "isbn", "pmid"]
+    kind: Literal["doi", "url", "reference", "isbn", "pmid", "pmc"]
     status: CitationStatus
     confidence: float = Field(ge=0, le=1)
     explanation: str

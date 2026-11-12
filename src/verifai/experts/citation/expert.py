@@ -24,6 +24,7 @@ from verifai.config import Settings
 from verifai.evidence.base import EvidenceProvider, EvidenceRegistry
 from verifai.experts.citation.decide import (
     decide_doi,
+    decide_invalid,
     decide_isbn,
     decide_pmid,
     decide_reference,
@@ -35,6 +36,7 @@ from verifai.experts.citation.extract import (
     dangling_markers,
     extract_citations,
     isbn_valid,
+    unresolvable_mentions,
 )
 from verifai.experts.citation.providers.base import ProviderOutcome
 from verifai.experts.citation.providers.crossref import CrossrefProvider
@@ -93,7 +95,7 @@ class CitationExpert:
 
     def check(self, text: str) -> ExpertResult:
         extracted = extract_citations(text or "")
-        dangling = dangling_markers(text or "")
+        dangling = dangling_markers(text or "") + unresolvable_mentions(text or "")
         truncated = len(extracted) > MAX_CITATIONS
         extracted = extracted[:MAX_CITATIONS]
         if not extracted:
@@ -111,9 +113,17 @@ class CitationExpert:
                     item.kind,
                     ", ".join(item.sources_unavailable),
                 )
-        return _summarize(checked, truncated=truncated, dangling=dangling)
+        return _summarize(_merge_same_paper(checked), truncated=truncated, dangling=dangling)
 
     def _check_one(self, citation: ExtractedCitation) -> CitationResult:
+        if citation.problem:
+            return decide_invalid(citation)
+        if citation.kind == "pmc" and citation.pmc:
+            pmid, answered = self._pubmed().pmid_for_pmc(citation.pmc)
+            if pmid is None:
+                outcome = ProviderOutcome("pubmed", unavailable=not answered)
+                return decide_pmid(replace(citation, pmid=citation.pmc), outcome)
+            return decide_pmid(replace(citation, pmid=pmid), self._pubmed().lookup_pmid(pmid))
         if citation.kind == "doi" and citation.doi:
             return self._check_doi(citation)
         if citation.kind == "url" and citation.url:
@@ -253,7 +263,7 @@ def _summarize(
     if dangling:
         marks = ", ".join(dangling)
         dangling_note = (
-            f" The text points to {marks}, but no matching numbered reference appears in it, "
+            f" The text points to {marks}, with no reference or title to look up, "
             "so there is nothing to check."
         )
     if not citations:
@@ -349,3 +359,21 @@ def _verdict(counts: Counter[CitationStatus], total: int) -> tuple[Verdict, str]
         Verdict.MIXED,
         "Some citations only partially matched, or could not be reached.",
     )
+
+
+def _merge_same_paper(results: list[CitationResult]) -> list[CitationResult]:
+    """A PMID and a PMC id for the same paper are one citation, cited twice."""
+    kept: list[CitationResult] = []
+    by_record: dict[str, int] = {}
+    for item in results:
+        key = item.matched_url if item.kind in {"pmid", "pmc"} and item.matched_url else None
+        if key is None or key not in by_record:
+            if key is not None:
+                by_record[key] = len(kept)
+            kept.append(item)
+            continue
+        first = kept[by_record[key]]
+        kept[by_record[key]] = first.model_copy(
+            update={"occurrences": first.occurrences + item.occurrences}
+        )
+    return kept

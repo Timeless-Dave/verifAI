@@ -20,10 +20,24 @@ from verifai.experts.citation.textnorm import word_count
 _DOI_RE = re.compile(r"\b(10\.\d{4,9}/[-._;()/:%A-Za-z0-9]+)", re.IGNORECASE)
 # New-style arXiv ids. arXiv registers each one with DataCite as 10.48550/arXiv.<id>.
 _ARXIV_RE = re.compile(
-    r"(?:\barXiv:\s*|\barxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?",
+    r"(?:\barXiv:\s*|\barxiv\.org/(?:abs|pdf)/)"
+    r"(\d{4}\.\d{4,5}|[a-z][a-z\-]+(?:\.[A-Z]{2})?/\d{7})(?:v\d+)?(?:\.pdf)?",
     re.IGNORECASE,
 )
-_PMID_RE = re.compile(r"\bPMID:?\s*(\d{1,9})\b")
+# A DOI that runs into a non-ASCII character, such as a Cyrillic "а" that
+# looks like a Latin "a". Cut at that character it would look up the wrong DOI.
+_DOI_LOOKALIKE = re.compile(r"\b10\.\d{4,9}/[^\s<>\"';]*?[^\x00-\x7f][^\s<>\"';]*")
+_ZERO_WIDTH = re.compile("[\u200b\u200c\u200d\u2060\ufeff\u00ad]")
+_MD_LINK = re.compile(r"\[([^\]\n]{3,200})\]\((https?://[^\s()]+(?:\([^\s()]*\)[^\s()]*)*)\)")
+_PMC_RE = re.compile(r"\bPMC\s?(\d{3,9})\b")
+_AUTHOR_YEAR = re.compile(
+    r"\(([A-Z][\w'’\-]+(?:\s+et\s+al\.?)?(?:\s+(?:and|&)\s+[A-Z][\w'’\-]+)?),?\s+((?:19|20)\d{2}[a-z]?)\)"
+)
+_IBID = re.compile(r"\b(?:ibid|op\.\s*cit|loc\.\s*cit)\.?", re.IGNORECASE)
+_VAGUE_LABEL = re.compile(
+    r"\b(?:paper|here|link|this|pdf|article|source|website|page)\b", re.IGNORECASE
+)
+_PMID_RE = re.compile(r"\bPMID:?\s*(\d+)\b")
 _ISBN_RE = re.compile(r"\bISBN(?:-1[03])?:?\s*((?:97[89][-\s]?)?(?:\d[-\s]?){9}[\dXx])\b")
 _URL_RE = re.compile(r"https?://[^\s<>\"'\]\[]+", re.IGNORECASE)
 _YEAR_PAREN_RE = re.compile(r"\(((?:19|20)\d{2})\)\.\s+")
@@ -119,16 +133,45 @@ class ExtractedCitation:
     et_al: bool = False
     isbn: str | None = None
     pmid: str | None = None
+    pmc: str | None = None
     occurrences: int = 1
+    # Why the identifier cannot be real, decided before any lookup.
+    problem: str | None = None
 
 
 def extract_citations(text: str) -> list[ExtractedCitation]:
     if not text or not text.strip():
         return []
+    text = prepare_text(text)
     normalized = _normalize(text)
     found: list[ExtractedCitation] = []
 
-    dois = [(match, clean_doi(match.group(1))) for match in _DOI_RE.finditer(normalized)]
+    lookalikes = list(_DOI_LOOKALIKE.finditer(normalized))
+    for match in lookalikes:
+        token = clean_doi(match.group(0))
+        odd = next(char for char in token if ord(char) > 127)
+        found.append(
+            ExtractedCitation(
+                kind="doi",
+                raw=_clip(_original_line_at(text, normalized, match) or match.group(0)),
+                start=match.start(),
+                end=match.end(),
+                doi=token,
+                problem=(
+                    f"The DOI {token} contains “{odd}” (U+{ord(odd):04X}), a non-ASCII "
+                    "character that looks like a Latin letter. DOIs are written in ASCII, so "
+                    "this one was altered, by accident or to pass as a real DOI."
+                ),
+            )
+        )
+    lookalike_spans = [(match.start(), match.end()) for match in lookalikes]
+    links = {match.group(2): match.group(1) for match in _MD_LINK.finditer(normalized)}
+
+    dois = [
+        (match, clean_doi(match.group(1)))
+        for match in _DOI_RE.finditer(normalized)
+        if not _overlaps(match.start(), match.end(), lookalike_spans)
+    ]
     dois += [
         (match, f"10.48550/arXiv.{match.group(1)}") for match in _ARXIV_RE.finditer(normalized)
     ]
@@ -143,22 +186,28 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         # every DOI takes the first line's title and year.
         crowded = sum(1 for other, _ in dois if line_start <= other.start() < line_end) > 1
         if crowded:
-            raw_line = _original_line(text, match.group(0)) or raw_line
+            raw_line = _original_line_at(text, normalized, match) or raw_line
         meta = _parse_bibliographic(raw_line)
+        raw = match.group(0) if doi.startswith("10.48550/arXiv.") else (raw_line or doi)
+        title = meta.get("title")
+        label = _link_label(links, match.group(0))
+        if label:
+            # The link text names a work. Compare it with the work the link
+            # really points to: "Attention Is All You Need" pointing at BERT.
+            title, raw = label, f"[{label}]({_link_target(links, match.group(0))})"
         found.append(
             ExtractedCitation(
                 kind="doi",
-                raw=_clip(
-                    match.group(0) if doi.startswith("10.48550/arXiv.") else (raw_line or doi)
-                ),
+                raw=_clip(raw),
                 start=line_start,
                 end=line_end,
                 doi=doi,
-                title=meta.get("title"),
+                title=title,
                 surnames=list(meta.get("surnames") or []),
                 year=meta.get("year"),
                 venue=meta.get("venue"),
                 et_al=bool(meta.get("et_al")),
+                problem=_arxiv_problem(doi),
             )
         )
 
@@ -171,23 +220,32 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         found.append(reference)
         occupied.append((reference.start, reference.end))
 
-    for match in _PMID_RE.finditer(normalized):
-        line_start, line_end = _line_bounds(normalized, match.start(), match.end())
-        line = normalized[line_start:line_end]
+    for match in [*_PMID_RE.finditer(normalized), *_PMC_RE.finditer(normalized)]:
+        # Judge ownership by the line as pasted. A reference list with no
+        # blank lines is joined into one paragraph, and a DOI elsewhere in it
+        # must not swallow this identifier.
+        line = _original_line_at(text, normalized, match) or ""
         if _DOI_RE.search(line) or _ARXIV_RE.search(line):
             continue  # the DOI on this line already identifies the work
         meta = _parse_bibliographic(line)
+        is_pmc = match.re is _PMC_RE
+        number = match.group(1)
+        problem = None
+        if not is_pmc and not 0 < int(number) < 100_000_000:
+            problem = f"PMID {number} is not a valid PubMed id. PubMed ids are 1 to 8 digits."
         found.append(
             ExtractedCitation(
-                kind="pmid",
-                raw=_clip(line.strip()),
+                kind="pmc" if is_pmc else "pmid",
+                raw=_clip(line.strip() or match.group(0)),
                 start=match.start(),
                 end=match.end(),
-                pmid=match.group(1),
+                pmid=None if is_pmc else number,
+                pmc=f"PMC{number}" if is_pmc else None,
                 title=meta.get("title"),
                 year=meta.get("year"),
                 venue=meta.get("venue"),
                 surnames=list(meta.get("surnames") or []),
+                problem=problem,
             )
         )
 
@@ -204,14 +262,12 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
         url = clean_url(match.group(0))
         if not url or _is_doi_url(url) or _ARXIV_RE.search(url):
             continue
-        if _overlaps(match.start(), match.end(), occupied + url_spans):
+        if _overlaps(match.start(), match.end(), url_spans):
             continue
-        line_start, line_end = _line_bounds(normalized, match.start(), match.end())
-        if _overlaps(line_start, line_end, occupied):
-            continue
-        # A URL sitting on a line we already accepted as a reference or DOI
-        # belongs to that citation. Compare against line spans we stored.
-        if any(line_start >= start and line_end <= end for start, end in occupied):
+        # A URL on the same pasted line as a DOI or a structured reference
+        # belongs to that citation. Other URLs are checked on their own.
+        line = _original_line_at(text, normalized, match) or ""
+        if _DOI_RE.search(line) or _find_references(line):
             continue
         found.append(
             ExtractedCitation(kind="url", raw=url, start=match.start(), end=match.end(), url=url)
@@ -220,6 +276,54 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
 
     found.sort(key=lambda item: (item.start, item.end))
     return _dedupe(found)
+
+
+def prepare_text(text: str) -> str:
+    """Undo what copying from a PDF or a web page does to identifiers.
+
+    Zero-width characters are invisible and never part of an identifier. A
+    DOI link written with %2F for its slash is the same DOI. A DOI broken at
+    a period at the end of a line ("10.1109/CVPR.\\n2016.90") is one DOI.
+    """
+    text = _ZERO_WIDTH.sub("", text or "")
+    text = re.sub(r"(\b10\.\d{4,9})%2F", r"\1/", text, flags=re.IGNORECASE)
+    return re.sub(r"(\b10\.\d{4,9}/[^\s<>\"']*[.\-])[ \t]*\r?\n[ \t]*(?=\d)", r"\1", text)
+
+
+def unresolvable_mentions(text: str) -> list[str]:
+    """Pointers with nothing to look up: "(Nguyen et al., 2021)" and "ibid."."""
+    text = prepare_text(text)
+    found = [match.group(0) for match in _AUTHOR_YEAR.finditer(text)]
+    found += [match.group(0) for match in _IBID.finditer(text)]
+    return list(dict.fromkeys(found))
+
+
+def _arxiv_problem(doi: str) -> str | None:
+    match = re.fullmatch(r"10\.48550/arXiv\.(\d{2})(\d{2})\.\d{4,5}", doi)
+    if not match:
+        return None
+    month = int(match.group(2))
+    if 1 <= month <= 12:
+        return None
+    arxiv_id = doi.split("arXiv.", 1)[1]
+    return (
+        f"arXiv:{arxiv_id} cannot exist. New-style arXiv ids start with the year and month, "
+        f"and {month:02d} is not a month."
+    )
+
+
+def _link_label(links: dict[str, str], token: str) -> str | None:
+    target = _link_target(links, token)
+    if target is None:
+        return None
+    label = links[target].strip()
+    if word_count(label) < 3 or _VAGUE_LABEL.search(label):
+        return None
+    return label
+
+
+def _link_target(links: dict[str, str], token: str) -> str | None:
+    return next((url for url in links if token in url), None)
 
 
 def clean_doi(raw: str) -> str:
@@ -455,21 +559,28 @@ def _normalize(text: str) -> str:
 
 
 def _dedupe(items: list[ExtractedCitation]) -> list[ExtractedCitation]:
-    seen: dict[tuple[str, str] | tuple[str, str, int], ExtractedCitation] = {}
+    seen: dict[tuple[str, ...], ExtractedCitation] = {}
     kept: list[ExtractedCitation] = []
     for item in items:
-        key: tuple[str, str] | tuple[str, str, int]
+        key: tuple[str, ...]
         if item.kind == "doi" and item.doi:
-            key = ("doi", item.doi.lower())
+            # The same DOI printed with different details is a different
+            # citation: [2] "Hinton 1990, Science" is not a repeat of [1].
+            details = _details_key(item)
+            key = ("doi", item.doi.lower(), *details)
+            if not details and any(k[:2] == key for k in seen):
+                key = next(k for k in seen if k[:2] == key)
         elif item.kind == "url" and item.url:
             key = ("url", item.url.lower().rstrip("/"))
         elif item.kind == "isbn" and item.isbn:
             key = ("isbn", item.isbn)
         elif item.kind == "pmid" and item.pmid:
             key = ("pmid", item.pmid)
+        elif item.kind == "pmc" and item.pmc:
+            key = ("pmc", item.pmc)
         else:
             folded = re.sub(r"\W+", " ", (item.title or "").casefold()).strip()
-            key = ("ref", folded, item.year or 0)
+            key = ("ref", folded, str(item.year or 0))
         if key in seen:
             seen[key].occurrences += 1  # checked once, reported as cited twice
             continue
@@ -546,3 +657,29 @@ def _original_line(text: str, token: str) -> str | None:
         if token in line:
             return line.strip()
     return None
+
+
+def _details_key(item: ExtractedCitation) -> tuple[str, ...]:
+    if not item.title and not item.year:
+        return ()
+    title = re.sub(r"\W+", " ", (item.title or "").casefold()).strip()
+    return (title, str(item.year or 0), (item.venue or "").casefold())
+
+
+def _original_line_at(text: str, normalized: str, match: re.Match[str]) -> str | None:
+    """The pasted line holding this match, counting repeats of the same token.
+
+    Joining lines changes only whitespace, so the n-th copy of a token in the
+    joined text is the n-th copy in the paste. Two references that cite the
+    same DOI each get their own line.
+    """
+    token = match.group(0)
+    nth = normalized[: match.start()].count(token)
+    position = -1
+    for _ in range(nth + 1):
+        position = text.find(token, position + 1)
+        if position < 0:
+            return _original_line(text, token)
+    start = text.rfind("\n", 0, position) + 1
+    end = text.find("\n", position)
+    return text[start : end if end >= 0 else len(text)].strip()

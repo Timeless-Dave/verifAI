@@ -309,6 +309,19 @@ def decide_isbn(citation: ExtractedCitation, outcome: ProviderOutcome | None) ->
     )
 
 
+def decide_invalid(citation: ExtractedCitation) -> CitationResult:
+    """An identifier that cannot exist, known without asking anyone."""
+    return _result(
+        citation,
+        status=CitationStatus.INVALID,
+        confidence=CONF_ISBN_BAD_CHECKSUM,
+        explanation=citation.problem or "This identifier cannot exist.",
+        consulted=[],
+        contributed=[],
+        unavailable=[],
+    )
+
+
 def decide_pmid(citation: ExtractedCitation, outcome: ProviderOutcome) -> CitationResult:
     pmid = citation.pmid or ""
     consulted = [outcome.source]
