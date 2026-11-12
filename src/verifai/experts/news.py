@@ -12,6 +12,7 @@ from verifai.retrieval.gdelt import GdeltRetriever
 from verifai.retrieval.google_factcheck import GoogleFactCheckRetriever
 from verifai.retrieval.pages import PageRetriever
 from verifai.retrieval.types import Retriever
+from verifai.retrieval.wikidata import WikidataRetriever
 from verifai.retrieval.wikipedia import WikipediaRetriever
 from verifai.schemas import ExpertResult
 
@@ -58,6 +59,7 @@ def build_news_expert(http: PoliteHttp, settings: Settings, judge: Judge) -> New
         GdeltRetriever(http),
         CurrentEventsRetriever(http),
         WikipediaRetriever(http),
+        WikidataRetriever(http),
         PageRetriever(http),
     ]
     configured = bool(settings.google_factcheck_api_key)

@@ -121,15 +121,33 @@ def _is_google(vote: SourceVote) -> bool:
 
 
 def _reduce(members: list[SourceVote]) -> IndependentSource | None:
+    """One vote per independent source.
+
+    Copies of one document, or one fact-check service, that disagree with
+    themselves cast no vote. A source that returned several different
+    documents, such as three Wikipedia articles, takes the side at least
+    two thirds of them took, at lower confidence. A tie casts no vote.
+    """
+    key = _group_key(members)
     stances = {member.stance for member in members}
     if len(stances) != 1:
-        return None
-    stance = next(iter(stances))
-    confidence = sum(_bounded(member.confidence) for member in members) / len(members)
+        if not key.startswith("family:") or key == "family:google_factcheck":
+            return None
+        support = [member for member in members if member.stance is Stance.SUPPORTS]
+        refute = [member for member in members if member.stance is Stance.REFUTES]
+        majority, minority = (support, refute) if len(support) > len(refute) else (refute, support)
+        if len(majority) < 2 * len(minority):
+            return None
+        share = len(majority) / len(members)
+        members = majority
+    else:
+        share = 1.0
+    stance = members[0].stance
+    confidence = share * sum(_bounded(member.confidence) for member in members) / len(members)
     sources = tuple(dict.fromkeys(member.source for member in members))
     titles = tuple(dict.fromkeys(member.title for member in members if member.title))
     return IndependentSource(
-        key=_group_key(members),
+        key=key,
         stance=stance,
         confidence=confidence,
         sources=sources,

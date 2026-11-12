@@ -306,3 +306,31 @@ def test_family_fallback_uses_the_source_name() -> None:
         ]
     )
     assert result.verdict is Verdict.SUPPORTED
+
+
+def test_a_clear_majority_of_one_sources_articles_counts_once() -> None:
+    result = corroborate(
+        [
+            _vote("wikipedia", Stance.SUPPORTS, title="Mount Everest"),
+            _vote("wikipedia", Stance.SUPPORTS, title="Himalayas"),
+            _vote("wikipedia", Stance.REFUTES, title="Timeline of expeditions"),
+            _vote("wikidata", Stance.SUPPORTS, family="wikidata", title="Q513"),
+        ]
+    )
+    assert result.verdict is Verdict.SUPPORTED
+    assert len(result.support) == 2
+    wikipedia = next(group for group in result.support if "wikipedia" in group.sources)
+    assert wikipedia.confidence < 0.8
+
+
+def test_a_tie_inside_one_source_still_casts_no_vote() -> None:
+    result = corroborate(
+        [
+            _vote("wikipedia", Stance.SUPPORTS, title="A"),
+            _vote("wikipedia", Stance.SUPPORTS, title="B"),
+            _vote("wikipedia", Stance.REFUTES, title="C"),
+            _vote("wikipedia", Stance.REFUTES, title="D"),
+            _vote("wikidata", Stance.SUPPORTS, family="wikidata", title="Q1"),
+        ]
+    )
+    assert result.verdict is Verdict.UNVERIFIABLE

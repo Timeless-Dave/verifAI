@@ -115,37 +115,107 @@ def test_wikipedia_extract_and_snippet_fallback(polite_http, http_mock):
 
 
 def test_wikidata(polite_http, http_mock):
-    http_mock.get("https://www.wikidata.org/w/api.php").mock(
-        side_effect=[
-            httpx.Response(
+    election = {
+        "labels": {"en": {"value": "2016 United States presidential election"}},
+        "descriptions": {"en": {"value": "58th quadrennial U.S. presidential election"}},
+        "claims": {
+            "P585": [_time_statement("+2016-11-08T00:00:00Z", 11)],
+            "P991": [_item_statement("Q22686")],
+            "P2044": [_quantity_statement("+12.5", "Q11573")],
+            "P726": [_item_statement("Q6294", rank="deprecated")],
+        },
+    }
+
+    def api(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if params["action"] == "wbsearchentities":
+            hits = {"2016 United States presidential election": "Q699872", "Joe Biden": None}
+            found = hits.get(params["search"])
+            return httpx.Response(200, json={"search": [{"id": found}] if found else []})
+        if params["props"] == "labels":
+            labels = {"Q22686": "Donald Trump", "Q11573": "metre"}
+            return httpx.Response(
                 200,
                 json={
-                    "search": [
-                        {
-                            "id": "Q243",
-                            "label": "Eiffel Tower",
-                            "description": "tower in Paris",
-                            "concepturi": "http://www.wikidata.org/entity/Q243",
-                        },
-                        {"id": "Q1", "label": "", "description": ""},
-                    ]
+                    "entities": {
+                        qid: {"labels": {"en": {"value": labels[qid]}}}
+                        for qid in params["ids"].split("|")
+                        if qid in labels
+                    }
                 },
-            ),
-            httpx.Response(200, json={"search": [{"id": "Q2", "label": "Item"}]}),
-            httpx.Response(500, text="down"),
-            httpx.Response(200, json={"search": "nope"}),
-        ]
-    )
+            )
+        return httpx.Response(200, json={"entities": {"Q699872": election}})
+
+    http_mock.get("https://www.wikidata.org/w/api.php").mock(side_effect=api)
     wiki = WikidataRetriever(polite_http)
-    found = wiki.retrieve("Eiffel Tower")
+    found = wiki.retrieve("Joe Biden won the 2016 U.S. presidential election.")
     assert len(found.passages) == 1
-    assert found.passages[0].family == "wikidata"
-    bare = wiki.retrieve("Item only")
-    bare_url = bare.passages[0].url
-    assert bare_url is not None and bare_url.endswith("Q2")
-    assert wiki.retrieve("down please").unavailable
-    assert wiki.retrieve("bad shape").passages == []
+    passage = found.passages[0]
+    assert passage.family == "wikidata"
+    assert passage.url == "https://www.wikidata.org/wiki/Q699872"
+    assert passage.document_ids == ("wikidata:Q699872",)
+    assert passage.text == (
+        "2016 United States presidential election (58th quadrennial U.S. presidential election). "
+        "point in time: 8 November 2016; successful candidate: Donald Trump; "
+        "elevation above sea level: 12.5 metre."
+    )
     assert wiki.retrieve(" ").passages == []
+    assert wiki.retrieve("nothing capitalised here at all").passages == []
+
+
+def test_wikidata_outage(polite_http, http_mock):
+    http_mock.get("https://www.wikidata.org/w/api.php").mock(
+        return_value=httpx.Response(500, text="down")
+    )
+    assert WikidataRetriever(polite_http).retrieve("Barack Obama was born in Hawaii.").unavailable
+
+
+def test_wikidata_names_and_dates():
+    from verifai.retrieval.wikidata import _time_text, entity_names
+
+    assert entity_names("Joe Biden won the 2016 U.S. presidential election.") == [
+        "2016 United States presidential election",
+        "Joe Biden",
+    ]
+    assert entity_names("Mount Everest's official height is 8,849 m.") == ["Mount Everest"]
+    assert entity_names("Taking megadoses of vitamin C prevents colds.") == []
+    assert entity_names("Python was created by Guido van Rossum.") == ["Python", "Guido van Rossum"]
+    assert _time_text({"time": "+1961-08-04T00:00:00Z", "precision": 11}) == "4 August 1961"
+    assert _time_text({"time": "+1991-02-00T00:00:00Z", "precision": 10}) == "February 1991"
+    assert _time_text({"time": "-0480-00-00T00:00:00Z", "precision": 9}) == "480 BCE"
+
+
+def _item_statement(qid: str, *, rank: str = "normal") -> dict[str, object]:
+    return {
+        "rank": rank,
+        "mainsnak": {
+            "snaktype": "value",
+            "datavalue": {"type": "wikibase-entityid", "value": {"id": qid}},
+        },
+    }
+
+
+def _time_statement(time: str, precision: int) -> dict[str, object]:
+    return {
+        "rank": "normal",
+        "mainsnak": {
+            "snaktype": "value",
+            "datavalue": {"type": "time", "value": {"time": time, "precision": precision}},
+        },
+    }
+
+
+def _quantity_statement(amount: str, unit: str) -> dict[str, object]:
+    return {
+        "rank": "normal",
+        "mainsnak": {
+            "snaktype": "value",
+            "datavalue": {
+                "type": "quantity",
+                "value": {"amount": amount, "unit": f"http://www.wikidata.org/entity/{unit}"},
+            },
+        },
+    }
 
 
 def test_google_factcheck(polite_http, http_mock):
