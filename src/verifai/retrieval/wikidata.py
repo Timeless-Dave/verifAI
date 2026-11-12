@@ -10,6 +10,7 @@ and end, creators, heights, election winners, and so on.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any
 
 from verifai.http import PoliteHttp
@@ -37,6 +38,7 @@ PROPERTIES: dict[str, str] = {
     "P61": "discoverer or inventor",
     "P170": "creator",
     "P178": "developer",
+    "P287": "designed by",
     "P112": "founded by",
     "P50": "author",
     "P800": "notable work",
@@ -60,6 +62,21 @@ PROPERTIES: dict[str, str] = {
     "P1181": "numeric value",
     "P2442": "also expressed as",
     "P2097": "term length of office",
+    "P580": "start time",
+    "P582": "end time",
+    "P276": "location",
+    "P30": "continent",
+    "P403": "mouth of the watercourse",
+    "P885": "origin of the watercourse",
+    "P4511": "vertical depth",
+    "P246": "element symbol",
+    "P1086": "atomic number",
+    "P84": "architect",
+    "P86": "composer",
+    "P57": "director",
+    "P175": "performer",
+    "P495": "country of origin",
+    "P1120": "number of deaths",
     "P26": "spouse",
     "P69": "educated at",
     "P108": "employer",
@@ -155,31 +172,45 @@ class WikidataRetriever:
             return RetrievalResult(self.name)
         lang = detect_language(text)
         self._claim = text
-        ids: list[str] = []
-        failed = 0
         names = entity_names(text)[: self.limit]
+        searched: list[tuple[str, list[dict[str, Any]]]] = []
+        failed = 0
         for name in names:
-            found, ok = self._search(name, lang)
+            hits, ok = self._search(name, lang)
+            # "the chemical symbol for gold" is no item. Gold is.
+            tail = re.search(r"\b(?:of|for)\s+(?:the\s+)?([a-z][a-z'’-]{2,})$", name)
+            if ok and not hits and tail:
+                hits, ok = self._search(tail.group(1), lang)
             failed += not ok
-            if found and found not in ids:
-                ids.append(found)
+            searched.append((name, hits))
         if names and failed == len(names):
             return RetrievalResult(self.name, unavailable=True, error="Wikidata search failed")
+        reach = self._sitelinks([str(hit["id"]) for _name, hits in searched for hit in hits])
+        ids: list[str] = []
+        for name, hits in searched:
+            found = _pick(hits, name, self._claim, reach)
+            if found and found not in ids:
+                ids.append(found)
         if not ids:
             return RetrievalResult(self.name)
-        entities = self._entities(ids, lang, props="labels|descriptions|claims")
-        if entities is None:
+        # One item at a time: a big item (a country) can pass the size cap
+        # alone, and it must not take the others down with it.
+        entities: dict[str, Any] = {}
+        for qid in ids:
+            entities.update(self._entities([qid], lang, props="labels|descriptions|claims") or {})
+        if not entities:
             return RetrievalResult(self.name, unavailable=True, error="Wikidata entities failed")
         referenced = sorted({ref for qid in ids for ref in _references(entities.get(qid, {}))})
         labels = self._labels(referenced, lang)
         passages = [
             passage
             for qid in ids
-            if (passage := render_item(qid, entities.get(qid, {}), labels, lang)) is not None
+            if qid in entities
+            and (passage := render_item(qid, entities[qid], labels, lang)) is not None
         ]
         return RetrievalResult(self.name, passages=passages)
 
-    def _search(self, name: str, lang: str) -> tuple[str | None, bool]:
+    def _search(self, name: str, lang: str) -> tuple[list[dict[str, Any]], bool]:
         body, _error = fetch_json(
             self.http,
             _API,
@@ -190,32 +221,41 @@ class WikidataRetriever:
                 "uselang": lang,
                 "strictlanguage": 0,
                 "format": "json",
-                "limit": 3,
+                "limit": 7,
                 "type": "item",
             },
             source=self.name,
         )
         if body is None:
-            return None, False
-        hits = [hit for hit in (body.get("search") or []) if isinstance(hit, dict)]
-        if not hits:
-            return None, True
-        # Several items share a name. Prefer the one whose description fits
-        # the claim: the professor, not the basketball player.
-        context = set(re.findall(r"[^\W\d_]{4,}", self._claim.casefold()))
-        best = max(
-            hits,
-            key=lambda hit: len(
-                context
-                & set(re.findall(r"[^\W\d_]{4,}", str(hit.get("description") or "").casefold()))
-            ),
-        )
-        if not context & set(
-            re.findall(r"[^\W\d_]{4,}", str(best.get("description") or "").casefold())
-        ):
-            best = hits[0]
-        found = best.get("id")
-        return (found if isinstance(found, str) else None), True
+            return [], False
+        hits = [
+            hit
+            for hit in (body.get("search") or [])
+            if isinstance(hit, dict) and isinstance(hit.get("id"), str)
+        ]
+        return hits, True
+
+    def _sitelinks(self, ids: list[str]) -> dict[str, int]:
+        """How many Wikipedias cover each item: the river, not the band named after it."""
+        reach: dict[str, int] = {}
+        unique = list(dict.fromkeys(ids))
+        for start in range(0, len(unique), 25):
+            body, _error = fetch_json(
+                self.http,
+                _API,
+                {
+                    "action": "wbgetentities",
+                    "ids": "|".join(unique[start : start + 25]),
+                    "props": "sitelinks",
+                    "format": "json",
+                },
+                source=self.name,
+            )
+            entities = body.get("entities") if body else None
+            for qid, item in (entities if isinstance(entities, dict) else {}).items():
+                links = item.get("sitelinks") if isinstance(item, dict) else None
+                reach[qid] = len(links) if isinstance(links, dict) else 0
+        return reach
 
     def _entities(self, ids: list[str], lang: str, *, props: str) -> dict[str, Any] | None:
         if not ids:
@@ -241,6 +281,48 @@ class WikidataRetriever:
     def _labels(self, ids: list[str], lang: str) -> dict[str, str]:
         entities = self._entities(ids[:50], lang, props="labels") or {}
         return {qid: label for qid, item in entities.items() if (label := _label(item, lang))}
+
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[^\W\d_]{4,}", text.casefold()))
+
+
+def _pick(hits: list[dict[str, Any]], name: str, claim: str, reach: dict[str, int]) -> str | None:
+    """The item a name means in this claim.
+
+    A description that shares words with the rest of the claim decides first:
+    the professor, not the basketball player. The name's own words do not
+    count, or "Apple Music, by Apple" would beat Apple. Then an item called
+    what the claim wrote, capitals included: "Apple" the company,
+    not "apple" the fruit. Then the item most Wikipedias cover: the river
+    Nile, not the band.
+    """
+    if not hits:
+        return None
+    context = _words(claim) - _words(name)
+    ranked = sorted(
+        enumerate(hits),
+        key=lambda pair: (
+            -len(context & _words(str(pair[1].get("description") or ""))),
+            not _exact(pair[1], name),
+            -reach.get(str(pair[1]["id"]), 0),
+            pair[0],
+        ),
+    )
+    return str(ranked[0][1]["id"])
+
+
+def _exact(hit: dict[str, Any], name: str) -> bool:
+    """The item is called what the claim wrote, capitals kept, accents not."""
+    match = hit.get("match")
+    written = match.get("text") if isinstance(match, dict) else None
+    want = _plain(name)
+    return any(_plain(str(text)).startswith(want) for text in (hit.get("label"), written) if text)
+
+
+def _plain(text: str) -> str:
+    folded = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in folded if not unicodedata.combining(char))
 
 
 def entity_names(claim: str) -> list[str]:

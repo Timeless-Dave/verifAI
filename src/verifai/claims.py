@@ -272,6 +272,11 @@ def _title_case(sentence: str) -> bool:
     ]
     if len(words) < 4:
         return False
+    # A title capitalises its verbs; "Germany won the 2014 FIFA World Cup."
+    # keeps one lowercase, and that makes it a sentence about proper nouns.
+    lower = [word for word in words if word[0].islower()]
+    if lower and sentence.rstrip().endswith((".", "!")) and len(lower) <= 2:
+        return False
     capped = sum(1 for word in words if word[0].isupper())
     return capped / len(words) >= 0.8
 
