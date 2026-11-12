@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}VerifAI · privacy{% endblock %}
+{% block body %}
+<article class="prose">
+  <h1>Privacy</h1>
+  <p>This page covers the VerifAI website and the VerifAI browser extension. Last updated 12 November 2026.</p>
+  <h2>What is sent</h2>
+  <ul>
+    <li>The text you paste, or that you ask the extension to check, is sent to the VerifAI server you use. The default server is https://useverifai.vercel.app. You can point the extension at a VerifAI server on your own computer instead.</li>
+    <li>To check that text, the server sends short pieces of it, such as DOIs, titles, links, and search terms, to public sources: Crossref, OpenAlex, DataCite, doi.org, PubMed, Europe PMC, Open Library, Wikipedia, Wikidata, GDELT, the Wayback Machine, and, when configured, Google Fact Check.</li>
+    <li>Your IP address reaches the server, as it does with any website. It is used only to limit how many checks one address can run.</li>
+  </ul>
+  <h2>What is kept</h2>
+  <ul>
+    <li>VerifAI does not store the text you check, does not build profiles, and sets no tracking cookies. There are no ads and no analytics.</li>
+    <li>The hosting provider keeps short-lived request logs, as every web host does.</li>
+    <li>The extension stores one setting in your browser: the server address you chose. It reads a page only when you ask it to check that page.</li>
+  </ul>
+  <h2>What is never done</h2>
+  <ul>
+    <li>Your text is not sold, shared for advertising, or used to train models.</li>
+    <li>No commercial AI service receives your text.</li>
+  </ul>
+  <h2>Contact</h2>
+  <p>Open an issue at <a href="https://github.com/Timeless-Dave/verifAI/issues">github.com/Timeless-Dave/verifAI</a>.</p>
+</article>
+{% endblock %}

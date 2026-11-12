@@ -1,49 +1,61 @@
 {% extends "base.html" %}
-{% block title %}VerifAI — check the citations{% endblock %}
+{% from "_ui.html" import icon %}
+{% block title %}VerifAI · check claims and citations{% endblock %}
 {% block body %}
-<section class="intro">
-  <div>
-    <p class="kicker">Claim checker</p>
-    <h1>Do these references exist?</h1>
-    <p class="lede">Paste a claim, a chatbot answer, or a link. VerifAI sends each claim to the matching checker, then shows one verdict with every source linked. A verdict other than unverified needs two independent sources that agree.</p>
-  </div>
-  <ol class="steps">
-    <li><strong>Pick a checker.</strong> Health claims go to PubMed and Europe PMC. News and politics go to fact-check reviews, GDELT, and Wikipedia current events. Other claims use Wikipedia, Wikidata, and pages you pasted. Citations still go to Crossref and OpenAlex.</li>
-    <li><strong>Ask independent sources.</strong> Google Fact Check, when a key is set, counts as one source even if it returns several reviews. The same paper in two indexes counts once. No one of those sources decides alone.</li>
-    <li><strong>Keep going if one is down.</strong> A missing provider lowers confidence. It does not silently become the whole verdict. Without a local model, pages are listed but not judged.</li>
+<section class="hero">
+  <h1>Is it true? Is the source real?</h1>
+  <p class="lede">Paste a chatbot answer, an article, or a reference list. VerifAI checks each citation and each claim against live sources and shows you what holds up.</p>
+  <ol class="promises">
+    <li><span class="num">01</span><span>Two independent sources before any verdict</span></li>
+    <li><span class="num">02</span><span>Fake, retracted, and mis-cited papers flagged</span></li>
+    <li><span class="num">03</span><span>Every source linked so you can check it yourself</span></li>
   </ol>
 </section>
 
 {% if mailto_is_placeholder %}
-<p class="banner banner-note">The contact address is still the example placeholder. Set <code>VERIFAI_MAILTO</code> in <code>.env</code> so Crossref can put this client in its polite pool.</p>
+<div class="notice">{{ icon("i-question") }}<p>The contact address is still the example placeholder. Set <code>VERIFAI_MAILTO</code> in <code>.env</code> so Crossref can put this client in its polite pool.</p></div>
 {% endif %}
 
-<form class="check-form" method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator="#spinner" hx-disabled-elt="find button">
-  <label for="claim">Pasted text</label>
-  <textarea id="claim" name="text" rows="12" required placeholder="Paste an answer that cites papers, DOIs, or links.">{{ text }}</textarea>
+<form class="check-form" method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator=".check-form" hx-disabled-elt="find button">
+  <label for="claim" class="label">Paste the text to check</label>
+  <textarea id="claim" name="text" rows="9" required placeholder="Paste text with claims, DOIs, links, or a reference list…">{{ text }}</textarea>
   <div class="form-row">
-    <button type="submit" class="primary">Check <span id="spinner" class="spinner htmx-indicator" aria-hidden="true"></span></button>
-    <button type="button" class="ghost" data-load-example>Load an example</button>
-    <p class="hint-inline">⌘/Ctrl + Enter</p>
+    <button type="submit" class="primary"><span class="btn-label">Check it</span><span id="spinner" class="spinner" aria-hidden="true"></span></button>
+    <button type="button" class="ghost" data-load-example>Try an example</button>
+    <p class="hint-inline"><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd></p>
   </div>
+  <p class="progress-note" aria-live="polite">Checking against live sources. Citations take a second or two; each claim takes a few seconds more.</p>
 </form>
 <script id="example-text" type="application/json">{{ example_json | safe }}</script>
 
 <div id="results">
   {% if results or error %}
     {% include "results.html" %}
-  {% else %}
-    <p class="hint">Each citation gets its own row: verified, partially matches, not found, or unreachable.</p>
   {% endif %}
 </div>
 
-<section class="legend">
-  <h2>What the statuses mean</h2>
-  <dl>
-    <div><dt>Verified</dt><dd>A retrieved record matches the citation, or the URL loaded, or the Wayback Machine has a snapshot.</dd></div>
-    <div><dt>Partially matches</dt><dd>A real record is close, but authors, year, or venue disagree, or the DOI points at a different title than the one printed beside it.</dd></div>
-    <div><dt>Not found</dt><dd>The sources that answered have no matching record, or the URL is a clear 404 with no archive. Often a fabricated citation. Coverage is not perfect, so confidence is lower when a source was down.</dd></div>
-    <div><dt>Unreachable</dt><dd>The check could not be finished: timeout, server error, or the host refused the fetch. This is not evidence the citation is fake.</dd></div>
-  </dl>
+<section class="explain">
+  <details>
+    <summary>{{ icon("i-chevron", "icon chevron") }}How it works</summary>
+    <ol class="steps">
+      <li><strong>Citations.</strong> Each DOI, arXiv id, PMID, ISBN, link, and reference is looked up in Crossref, OpenAlex, DataCite, PubMed, and Open Library. Retractions come from Retraction Watch through Crossref.</li>
+      <li><strong>Claims.</strong> Health claims go to PubMed and Europe PMC. News goes to fact-check reviews, GDELT, and Wikipedia current events. Everything else uses Wikipedia, Wikidata, and pages you pasted.</li>
+      <li><strong>Two sources.</strong> A claim is supported or refuted only when two independent sources agree. The same paper in two indexes counts once, and one website counts once however many pages it returns.</li>
+      <li><strong>Keep going if one is down.</strong> A missing source lowers confidence. It never silently becomes the whole verdict.</li>
+    </ol>
+  </details>
+  <details>
+    <summary>{{ icon("i-chevron", "icon chevron") }}What the labels mean</summary>
+    <dl class="labels">
+      <div><dt><span class="badge tone-good">{{ icon("i-check") }}<span>Verified</span></span></dt><dd>A real record matches the citation.</dd></div>
+      <div><dt><span class="badge tone-warning">{{ icon("i-split") }}<span>Partial match</span></span></dt><dd>The work is real, but the title, year, authors, or journal printed beside it are wrong.</dd></div>
+      <div><dt><span class="badge tone-critical">{{ icon("i-cross") }}<span>Not found</span></span></dt><dd>No source has it. Often a made-up citation.</dd></div>
+      <div><dt><span class="badge tone-critical">{{ icon("i-ban") }}<span>Invalid</span></span></dt><dd>The identifier cannot exist, for example an ISBN that fails its checksum.</dd></div>
+      <div><dt><span class="badge tone-serious">{{ icon("i-alert") }}<span>Retracted</span></span></dt><dd>The paper exists but was withdrawn. It cannot support a claim.</dd></div>
+      <div><dt><span class="badge tone-neutral">{{ icon("i-cloud") }}<span>Couldn't check</span></span></dt><dd>A source timed out or refused. This is not evidence of a fake.</dd></div>
+      <div><dt><span class="badge tone-good">{{ icon("i-check") }}<span>Supported</span></span> <span class="badge tone-critical">{{ icon("i-cross") }}<span>Refuted</span></span></dt><dd>Two independent sources agree the claim is true, or false.</dd></div>
+      <div><dt><span class="badge tone-neutral">{{ icon("i-question") }}<span>Unverified</span></span></dt><dd>Fewer than two independent sources spoke to it. That is not the same as false.</dd></div>
+    </dl>
+  </details>
 </section>
 {% endblock %}

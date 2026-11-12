@@ -15,6 +15,7 @@ from verifai.orchestrate import CheckBundle, run_check
 from verifai.sample import EXAMPLE_TEXT
 from verifai.schemas import CheckRequest, CheckResponse, clean_paste, source_label
 from verifai.web.throttle import Throttled
+from verifai.web.view import build_view
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +48,10 @@ def build_web_router() -> APIRouter:
             },
         )
 
+    @router.get("/privacy", response_class=HTMLResponse)
+    def privacy(request: Request) -> HTMLResponse:
+        return _render(request, "privacy.html", {})
+
     @router.post("/check", response_class=HTMLResponse)
     def check_form(request: Request, text: Annotated[str, Form()] = "") -> HTMLResponse:
         partial = request.headers.get("hx-request") == "true"
@@ -71,6 +76,7 @@ def build_web_router() -> APIRouter:
                 context["confidence"] = bundle.confidence
                 context["explanation"] = bundle.explanation
                 context["skipped"] = list(bundle.claims_skipped)
+                context["view"] = build_view(bundle)
             except Throttled as refused:
                 context["error"] = refused.message
             except Exception:

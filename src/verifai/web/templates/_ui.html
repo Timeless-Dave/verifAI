@@ -1,0 +1,49 @@
+{% macro icon(name, cls="icon") -%}
+<svg class="{{ cls }}" aria-hidden="true" focusable="false"><use href="#{{ name }}"/></svg>
+{%- endmacro %}
+
+{% macro badge(b, size="") -%}
+<span class="badge tone-{{ b.tone }} {{ size }}">{{ icon(b.icon) }}<span>{{ b.label }}</span></span>
+{%- endmacro %}
+
+{% macro meter(value, tone, label="Confidence") -%}
+<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ (value * 100)|round|int }}" aria-label="{{ label }}">
+  <span class="meter-label">{{ label }}</span>
+  <span class="meter-track"><span class="meter-fill tone-{{ tone }}" style="width: {{ (value * 100)|round|int }}%"></span></span>
+  <span class="meter-value">{{ value|pct }}</span>
+</div>
+{%- endmacro %}
+
+{% macro segbar(bar) -%}
+<figure class="segbar">
+  <figcaption><span class="segbar-title">{{ bar.title }}</span><span class="segbar-total">{{ bar.total }}</span></figcaption>
+  <div class="segbar-track" role="img" aria-label="{{ bar.title }}: {% for s in bar.segments %}{{ s.count }} {{ s.label }}{% if not loop.last %}, {% endif %}{% endfor %}">
+    {% for s in bar.segments %}
+    <span class="seg tone-{{ s.tone }}" style="flex-grow: {{ s.count }}" title="{{ s.label }}: {{ s.count }} of {{ bar.total }}"></span>
+    {% endfor %}
+  </div>
+  <ul class="segbar-legend">
+    {% for s in bar.segments %}
+    <li><span class="dot tone-{{ s.tone }}">{{ icon(s.icon) }}</span>{{ s.label }} <b>{{ s.count }}</b></li>
+    {% endfor %}
+  </ul>
+</figure>
+{%- endmacro %}
+
+{% macro balance(card) -%}
+{% set total = card.support + card.refute + card.unrelated %}
+<div class="balance">
+  {% if total %}
+  <div class="balance-track" role="img" aria-label="{{ card.support }} supporting, {{ card.refute }} contradicting, {{ card.unrelated }} not about it">
+    {% if card.support %}<span class="seg tone-good" style="flex-grow: {{ card.support }}" title="Independent sources that back it up: {{ card.support }}"></span>{% endif %}
+    {% if card.refute %}<span class="seg tone-critical" style="flex-grow: {{ card.refute }}" title="Independent sources that contradict it: {{ card.refute }}"></span>{% endif %}
+    {% if card.unrelated %}<span class="seg tone-neutral" style="flex-grow: {{ card.unrelated }}" title="Results that were not about it: {{ card.unrelated }}"></span>{% endif %}
+  </div>
+  {% endif %}
+  <ul class="balance-legend">
+    <li><span class="dot tone-good">{{ icon("i-check") }}</span><b>{{ card.support }}</b> support</li>
+    <li><span class="dot tone-critical">{{ icon("i-cross") }}</span><b>{{ card.refute }}</b> contradict</li>
+    <li><span class="dot tone-neutral">{{ icon("i-question") }}</span><b>{{ card.unrelated }}</b> not about it</li>
+  </ul>
+</div>
+{%- endmacro %}

@@ -7,10 +7,11 @@ def test_homepage_and_form_and_json(client, http_mock):
     install(http_mock)
     home = client.get("/")
     assert home.status_code == 200
-    assert "Do these references exist?" in home.text
+    assert "Is it true? Is the source real?" in home.text
     assert "Crossref" in home.text
     assert "OpenAlex" in home.text
     assert "if one is down" in home.text
+    assert client.get("/privacy").status_code == 200
 
     empty = client.post("/check", data={"text": "   "})
     assert empty.status_code == 200
@@ -25,9 +26,11 @@ def test_homepage_and_form_and_json(client, http_mock):
     partial = client.post("/check", data={"text": EXAMPLE_TEXT}, headers={"HX-Request": "true"})
     assert partial.status_code == 200
     assert "<html" not in partial.text.lower()
-    assert partial.text.count("Verified") == 3
-    assert partial.text.count("Not found") == 3
-    assert partial.text.count("Partially matches") == 0
+    assert partial.text.count("<span>Verified</span>") == 3
+    assert partial.text.count("<span>Not found</span>") == 3
+    assert partial.text.count("<span>Partial match</span>") == 0
+    assert 'class="segbar"' in partial.text
+    assert "Need attention" in partial.text
 
     api = client.post("/api/v1/check", json={"text": EXAMPLE_TEXT})
     assert api.status_code == 200

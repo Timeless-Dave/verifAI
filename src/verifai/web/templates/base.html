@@ -3,25 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}VerifAI{% endblock %}</title>
+  <meta name="description" content="Check claims and citations against retrieved sources. Fake, retracted, and mis-cited papers are flagged, and every source is linked.">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-cross" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+      <symbol id="i-question" viewBox="0 0 24 24"><path d="M9.3 9.2a2.8 2.8 0 1 1 4 2.5c-.8.4-1.3 1-1.3 1.9v.6"/><path d="M12 17.6v.1"/></symbol>
+      <symbol id="i-split" viewBox="0 0 24 24"><path d="M4.5 9.5c2.5-2.4 5-2.4 7.5 0s5 2.4 7.5 0M4.5 15c2.5-2.4 5-2.4 7.5 0s5 2.4 7.5 0"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.5l8.5 15h-17z"/><path d="M12 10v4M12 16.8v.1"/></symbol>
+      <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M6.8 6.8l10.4 10.4"/></symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7.5 18h9a3.8 3.8 0 0 0 .4-7.6A5.6 5.6 0 0 0 6.2 11.2 3.4 3.4 0 0 0 7.5 18z"/></symbol>
+      <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 4v16M7 20h10M5 8h14M5 8l-2.5 6a2.8 2.8 0 0 0 5 0zM19 8l-2.5 6a2.8 2.8 0 0 0 5 0z"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 5.5A1.5 1.5 0 0 1 6.5 4H19v14H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5A1.5 1.5 0 0 0 6.5 21H19"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    </defs>
+  </svg>
   <header class="masthead">
-    <div class="wrap masthead-row">
-      <a class="wordmark" href="/">Verif<span>AI</span></a>
-      <p class="masthead-note">Local claim check. No commercial model API.</p>
+    <div class="wrap">
+      <div class="masthead-strap">
+        <span>The claim desk · checked against live sources</span>
+        <nav class="masthead-nav" aria-label="Site">
+          <a href="/docs">API</a>
+          <a href="/privacy">Privacy</a>
+          <a href="https://github.com/Timeless-Dave/verifAI" rel="noopener noreferrer">GitHub</a>
+        </nav>
+      </div>
+      <div class="nameplate">
+        <a class="wordmark" href="/" aria-label="VerifAI home">Verif<i>AI</i></a>
+        <p class="nameplate-note">Two sources, or no verdict.</p>
+      </div>
     </div>
   </header>
   <main class="wrap">
     {% block body %}{% endblock %}
   </main>
   <footer class="wrap site-foot">
-    <p>Verdicts are computed from records retrieved at check time. A language model’s memory is not a source.</p>
-    <p><a href="/docs">API docs</a> · MIT license · htmx is vendored under the Zero-Clause BSD license.</p>
+    <p>Verdicts come from sources retrieved at check time. A language model’s memory is never a source.</p>
+    <p><a href="/docs">API docs</a> · <a href="/privacy">Privacy</a> · MIT license · htmx is vendored under the Zero-Clause BSD license.</p>
   </footer>
 </body>
 </html>

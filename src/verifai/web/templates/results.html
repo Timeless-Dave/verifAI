@@ -1,141 +1,121 @@
+{% from "_ui.html" import icon, badge, meter, segbar, balance %}
 {% if error %}
-<p class="banner" role="alert">{{ error }}</p>
+<div class="notice tone-warning" role="alert">{{ icon("i-alert") }}<p>{{ error }}</p></div>
 {% elif results is not none and results|length == 0 %}
-<p class="banner" role="status">No checker is registered for this paste yet.</p>
-{% elif results %}
-  {% if combined %}
-  <section class="verdict verdict-{{ verdict.value }}" aria-live="polite">
-    <p class="kicker">Verdict · {% if verdict.value == "unverifiable" %}Unverified{% else %}{{ verdict.value|replace("_", " ")|title }}{% endif %} · {{ confidence|pct }}</p>
+<div class="notice" role="status">{{ icon("i-question") }}<p>No checker is registered for this paste yet.</p></div>
+{% elif view %}
+<section class="summary" aria-live="polite">
+  <div class="summary-head">
+    <span class="stamp tone-{{ view.badge.tone }}">{{ icon(view.badge.icon) }}{{ view.badge.label }}</span>
+    <div>
+      <p class="eyebrow">The verdict on this paste</p>
+      <p class="summary-line">{{ view.headline }}</p>
+    </div>
+  </div>
+  {% if view.confidence is not none %}{{ meter(view.confidence, view.badge.tone) }}{% endif %}
+  <dl class="stats">
+    {% if view.claims_found %}
+    <div class="stat"><dt>Claims checked</dt><dd>{{ view.claims_checked }}{% if view.claims_found > view.claims_checked %}<small> / {{ view.claims_found }}</small>{% endif %}</dd></div>
+    {% endif %}
+    {% if view.citation_total %}
+    <div class="stat"><dt>Citations</dt><dd>{{ view.citation_total }}</dd></div>
+    <div class="stat{% if view.citation_problems %} stat-alert{% endif %}"><dt>Need attention</dt><dd>{{ view.citation_problems }}</dd></div>
+    {% endif %}
+  </dl>
+  <div class="bars">
+    {% if view.claim_bar %}{{ segbar(view.claim_bar) }}{% endif %}
+    {% if view.citation_bar %}{{ segbar(view.citation_bar) }}{% endif %}
+  </div>
+  <details class="why">
+    <summary>{{ icon("i-chevron", "icon chevron") }}How this verdict was reached</summary>
     <p>{{ explanation }}</p>
-  </section>
-  {% for claim in combined %}
-  <section class="claim">
-    <h2>{{ claim.claim }}</h2>
-    <p class="kicker">{{ claim.verdict_label }} · {{ claim.experts|join(", ") }}</p>
-    {% if claim.explanation != explanation %}<p>{{ claim.explanation }}</p>{% endif %}
-    <ul class="sources">
-      {% for item in claim.evidence %}
-      <li>
-        <span class="kind">{{ source_label(item.source) }}{% if item.speaker %} · {{ item.speaker }}{% endif %}</span>
-        {% if item.url %}
-        <a href="{{ item.url }}" rel="noopener noreferrer">{{ item.title or item.url }}</a>
-        {% elif item.title %}
-        <span>{{ item.title }}</span>
-        {% endif %}
-        {% if item.stance and item.stance != "neutral" %}<span class="chip">{{ item.stance }}</span>{% endif %}
-        {% if item.snippet %}<p class="muted">{{ item.snippet }}</p>{% endif %}
-        {% if item.reason %}<p class="reason">{% if item.stance and item.stance != "neutral" %}Why it counts: {% endif %}{{ item.reason }}</p>{% endif %}
-      </li>
-      {% else %}
-      <li class="muted">No passage was retrieved for this claim.</li>
-      {% endfor %}
-    </ul>
-    {% if "health" in claim.experts %}
-    <p class="banner banner-note">This is not medical advice. It does not diagnose, treat, or recommend care.</p>
-    {% endif %}
-  </section>
-  {% endfor %}
-  {% if skipped %}
-  <section class="claim skipped">
-    <h2>Not checked yet</h2>
-    <p>Only the first claims in a paste are checked at once. These were found but not looked at:</p>
-    <ul>{% for item in skipped %}<li>{{ item }}</li>{% endfor %}</ul>
-    <form method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator="#spinner" hx-disabled-elt="find button">
-      <input type="hidden" name="text" value="{{ skipped|join('\n') }}">
-      <button type="submit">Check these {{ skipped|length }} claims</button>
-    </form>
-  </section>
-  {% endif %}
-  {% endif %}
-  {% for result in results %}
-  {% if result.verdict_scope == "citations" %}
-  <section class="verdict verdict-{{ result.verdict.value }}" aria-live="polite">
-    <p class="kicker">Citation verdict · {{ result.verdict_label }} · {{ result.confidence|pct }}</p>
-    <p>{{ result.explanation }}</p>
-    {% if result.sources_consulted %}
-    <p class="source-line">
-      Consulted
-      {% for name in result.sources_consulted %}<span class="chip">{{ source_label(name) }}</span>{% endfor %}
-      {% if result.sources_unavailable %}
-        <span class="source-gap">No answer from
-          {% for name in result.sources_unavailable %}<span class="chip chip-gap">{{ source_label(name) }}</span>{% endfor %}
-        </span>
-      {% endif %}
-    </p>
-    {% endif %}
-  </section>
+  </details>
+</section>
 
-  {% if result.citations %}
-  <div class="table-wrap">
-    <table class="ledger">
-      <caption>Per-citation results</caption>
-      <thead>
-        <tr>
-          <th scope="col">#</th>
-          <th scope="col">Citation</th>
-          <th scope="col">Status</th>
-          <th scope="col">Confidence</th>
-          <th scope="col">Sources</th>
-          <th scope="col">Matched record</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for citation in result.citations %}
-        <tr class="row-{{ citation.status.value }}">
-          <td class="num" data-label="#">{{ loop.index }}</td>
-          <td class="cite" data-label="Citation">
-            <span class="kind">{{ {"doi": "DOI", "url": "URL", "reference": "Reference", "isbn": "ISBN", "pmid": "PMID"}[citation.kind] }}</span>
-            <span class="raw">{{ citation.raw }}</span>
-            {% if citation.occurrences > 1 %}<span class="chip">cited {{ citation.occurrences }}×</span>{% endif %}
-          </td>
-          <td data-label="Status"><span class="stamp stamp-{{ citation.status.value }}">{{ citation.status_label }}</span></td>
-          <td class="num" data-label="Confidence">{{ citation.confidence|pct }}</td>
-          <td data-label="Sources">
-            {% for name in citation.sources_contributed %}
-              <span class="chip">{{ source_label(name) }}</span>
-            {% else %}
-              <span class="muted">none answered</span>
-            {% endfor %}
-            {% for name in citation.sources_unavailable %}
-              <span class="chip chip-gap">{{ source_label(name) }} down</span>
-            {% endfor %}
-          </td>
-          <td data-label="Matched record">
-            {% if citation.matched_title %}
-              <span class="matched-title">{{ citation.matched_title }}</span>
-              <span class="matched-meta">
-                {% if citation.matched_authors %}{{ citation.matched_authors }}{% endif %}
-                {% if citation.matched_year %} · {{ citation.matched_year }}{% endif %}
-                {% if citation.matched_venue %} · {{ citation.matched_venue }}{% endif %}
-              </span>
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-        </tr>
-        <tr class="detail">
-          <td></td>
-          <td colspan="5">
-            <p>{{ citation.explanation }}</p>
-            {% if citation.mismatches %}
-            <ul class="mismatches">
-              {% for item in citation.mismatches %}<li>{{ item }}</li>{% endfor %}
-            </ul>
-            {% endif %}
-            {% if citation.links %}
-            <p class="links">
-              {% for link in citation.links %}
-              <a href="{{ link.url }}" rel="noopener noreferrer">{{ link.label }}</a>
-              {% endfor %}
-            </p>
-            {% endif %}
-          </td>
-        </tr>
+{% if view.claims %}
+<section class="group" aria-labelledby="claims-h">
+  <h2 id="claims-h" class="group-title">The claims <span class="count">{{ view.claims|length }} checked</span></h2>
+  {% for card in view.claims %}
+  <article class="entry">
+    <span class="num">№ {{ "%02d"|format(loop.index) }}</span>
+    <div class="entry-body">
+      <div class="entry-head">
+        {{ badge(card.badge) }}
+        <span>{% for name in card.experts %}<span class="tag">{{ name }}</span>{% endfor %}</span>
+        {% for flag in card.flags %}<span class="tag tag-alert">{{ icon("i-alert") }}{{ flag }}</span>{% endfor %}
+      </div>
+      <h3 class="claim-text">{{ card.text }}</h3>
+      <p class="claim-line">{{ card.headline }}</p>
+      {{ balance(card) }}
+      {% if card.confidence is not none %}{{ meter(card.confidence, card.badge.tone) }}{% endif %}
+      <details class="why">
+        <summary>{{ icon("i-chevron", "icon chevron") }}Why, and every source</summary>
+        <p>{{ card.explanation }}</p>
+        {% for group in card.groups %}
+        <h4 class="evidence-head"><span class="dot tone-{{ group.tone }}"></span>{{ group.label }} <span class="count">{{ group.items|length }}</span></h4>
+        <ul class="evidence">
+          {% for item in group.items %}
+          <li>
+            <span class="source">{{ source_label(item.source) }}{% if item.speaker %} · {{ item.speaker }}{% endif %}</span>
+            {% if item.url %}<a href="{{ item.url }}" rel="noopener noreferrer">{{ item.title or item.url }}</a>{% elif item.title %}<span>{{ item.title }}</span>{% endif %}
+            {% if item.reason %}<p class="reason">{{ item.reason }}</p>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">No source was retrieved for this claim.</p>
         {% endfor %}
-      </tbody>
-    </table>
+      </details>
+      {% if card.health %}<p class="fine">{{ icon("i-alert") }}Not medical advice. It does not diagnose, treat, or recommend care.</p>{% endif %}
+    </div>
+  </article>
+  {% endfor %}
+
+  {% if view.skipped %}
+  <div class="skipped">
+    <h3>{{ view.skipped|length }} more claim{% if view.skipped|length != 1 %}s{% endif %} waiting</h3>
+    <p class="muted">A paste is checked a few claims at a time.</p>
+    <ul>{% for item in view.skipped %}<li>{{ item }}</li>{% endfor %}</ul>
+    <form method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator=".check-form" hx-disabled-elt="find button">
+      <input type="hidden" name="text" value="{{ view.skipped|join('\n') }}">
+      <button type="submit" class="primary">Check these {{ view.skipped|length }}</button>
+    </form>
   </div>
   {% endif %}
-  {% endif %}
+</section>
+{% endif %}
+
+{% if view.citations %}
+<section class="group" aria-labelledby="citations-h">
+  <h2 id="citations-h" class="group-title">The citations <span class="count">{{ view.citations|length }} looked up</span></h2>
+  {% for c in view.citations %}
+  <article class="entry">
+    <span class="num">№ {{ "%02d"|format(loop.index) }}</span>
+    <div class="entry-body">
+      <div class="entry-head">
+        {{ badge(c.badge) }}
+        <span><span class="tag">{{ c.kind }}</span>{% if c.occurrences > 1 %}<span class="tag">cited {{ c.occurrences }}×</span>{% endif %}</span>
+      </div>
+      <p class="cite-raw">{{ c.raw }}</p>
+      {% if c.matched_title %}
+      <p class="cite-match">{{ icon("i-book") }}<span><span class="muted">On record as</span> {% if c.matched_url %}<a href="{{ c.matched_url }}" rel="noopener noreferrer">{{ c.matched_title }}</a>{% else %}{{ c.matched_title }}{% endif %}{% if c.matched_meta %} <span class="muted">· {{ c.matched_meta }}</span>{% endif %}</span></p>
+      {% endif %}
+      {% if c.mismatches %}
+      <ul class="mismatches">{% for m in c.mismatches %}<li>{{ icon("i-alert") }}<span>{{ m }}</span></li>{% endfor %}</ul>
+      {% endif %}
+      <details class="why">
+        <summary>{{ icon("i-chevron", "icon chevron") }}Details</summary>
+        <p>{{ c.explanation }}</p>
+        <p class="source-line">
+          {% for name in c.sources %}<span class="tag">{{ source_label(name) }}</span>{% else %}<span class="muted">No source answered.</span>{% endfor %}
+          {% for name in c.sources_down %}<span class="tag tag-alert">{{ source_label(name) }} down</span>{% endfor %}
+        </p>
+      </details>
+    </div>
+  </article>
   {% endfor %}
+</section>
+{% endif %}
+{% elif results %}
+<div class="notice" role="status">{{ icon("i-question") }}<p>{{ explanation or "Nothing checkable was found in this paste." }}</p></div>
 {% endif %}
