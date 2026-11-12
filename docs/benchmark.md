@@ -154,3 +154,25 @@ A blocked claim is one where the judged evidence took a side but no second indep
 Two fixes made before this run matter for reading older numbers. Qwen3.5 thinks before it answers by default. Its reasoning filled the token budget, so no passage was judged at all, and every FEVER and SciFact claim abstained. Thinking is now off for MLX, Ollama, and llama.cpp. The judge also read a passage that left a detail out as refuting the claim. The prompt now says missing information is not a contradiction. Blocks fell from 0.48 to 0.34, and refute leans from 58 to 42.
 
 The way to more verdicts is more independent sources for general and news claims, not a looser rule. A Google Fact Check key adds PolitiFact and other reviews, which is the obvious next step for LIAR-style statements.
+
+## Results after v0.2.0 (unreleased)
+
+Same command, sample, and model as the v0.2.0 table, run on 2026-11-12 with the fixes since then: claims are only real sentences, Wikidata gives the judge each item's key facts, a clear majority of one source's articles counts once, and fact-check reviews are judged against the claim. The first run had no Google Fact Check key (code at `be8618b`; its report wrongly names `7fbfedb`, a bug fixed in `fb5961c`). The second ran at `fb5961c` with a key.
+
+| | v0.2.0 | No fact-check key | With fact-check key |
+| --- | ---: | ---: | ---: |
+| Accuracy | 0.488 | 0.518 | 0.518 |
+| Abstention | 0.861 | 0.831 | 0.825 |
+| Correct when it answered | 18/23 | 23/28 | 23/29 |
+| General (FEVER) answered | 0 | 7 (4 right) | 7 (4 right) |
+| Health (SciFact) answered | 9 (4 right) | 7 (5 right) | 7 (5 right) |
+| News (LIAR) answered | 0 | 0 | 1 (0 right) |
+| Two-source blocks | 0.337 | 0.259 | 0.253 |
+| Citations | 16/16 | 16/16 | 16/16 |
+| Mean latency | 5.3 s | 8.3 s | 8.8 s |
+
+Of the wrong FEVER verdicts, two disagree with the label more than with the world. FEVER marks "Rupert Murdoch is a business owner" and "Konidela Production Company was established by the son of Shah Rukh Khan" as not enough information. VerifAI supported the first and refuted the second (the company was founded by Ram Charan). "Maria Theresa ruled for 40 years" is a real error: she ruled from 1740 to 1780.
+
+A Google Fact Check key barely moves LIAR. Its statements are from 2007 to 2016, a matching review is rare, and a review is one source that still needs a second. The key helps most with recent viral claims, which this sample does not measure. The one LIAR verdict it enabled was wrong: PolitiFact rated the Syria chemical-weapons statement Mostly True, and VerifAI refuted it.
+
+Latency rose by about 3 s per check, because Wikidata now takes up to five requests a claim.
