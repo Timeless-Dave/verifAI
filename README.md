@@ -102,39 +102,48 @@ Citations follow their own path. A free-text reference is searched in Crossref, 
 
 ## How well it works
 
-These numbers come from live tests of the public site on 12 November 2026, using claims VerifAI had never been tuned on. The expected answer for each claim was written down before the run.
+These numbers come from live tests of the public site on 12 November 2026. Each set was new claims that VerifAI had never been tuned on, and the expected answer for each claim was written down before the run. Between sets, the failures were studied and fixed, and the next set was always new claims.
 
 | Test set | Claims | Right verdict | Wrong verdict | Unverified |
 | --- | --- | --- | --- | --- |
-| 1st: 48 claims across ten areas, before that day's fixes | 48 | 17 | 0 | 28, and 3 skipped by mistake (since fixed) |
-| 2nd: 30 new claims, after the Wikidata fixes | 30 | 18 (60%) | 0 | 12 |
-| 3rd: 40 new claims, after the Wikipedia fix, with Google Fact Check on | 40 | 24 (60%) | 0 | 16 |
+| 1st: ten areas, before that day's fixes | 48 | 17 (35%) | 0 | 28, and 3 skipped by mistake (since fixed) |
+| 2nd: after the Wikidata fixes | 30 | 18 (60%) | 0 | 12 |
+| 3rd: after the Wikipedia fix, with Google Fact Check on | 40 | 24 (60%) | 0 | 16 |
+| 4th: after translation for other languages | 45 | 26 (58%) | 1 (a mistranslation, since fixed) | 18 |
+| 5th: after two-model translation and the classification fixes | 45 | 36 (80%) | 0 | 9 |
+| **6th: after Wikidata was counted once and translation was tuned** | **45** | **39 (87%)** | **0** | **6** |
 
-Across the three sets, VerifAI gave 59 verdicts and none was wrong. The claims covered science, history, geography, health, technology, culture, numbers, niche facts, myths, and claims in French, Spanish, Italian, Portuguese, German, and Chinese. Opinions such as "Pizza is the best food in the world" correctly got no verdict.
+**Topics covered:** science, history, geography, health, technology, culture, numbers, animal classification, and myths.
+
+**Languages covered:** Yoruba, Igbo, Hausa, Swahili, French, Spanish, Italian, Portuguese, German, Russian, Chinese, Japanese, Korean, Hindi, and Arabic. In the last set, 13 of 14 claims in other languages got the right verdict, and none got a wrong one.
+
+The one wrong verdict in all six sets came from a mistranslation: a translation model added a "not" to a Yoruba claim. Since then, two models must agree on a translation, or the claim gets no verdict.
 
 Refuted correctly, for example:
 
 - "Vaccines cause autism."
+- "Drinking bleach cures COVID-19."
 - "The Great Wall of China is visible from the Moon with the naked eye."
-- "Abraham Lincoln was the first president of the United States."
-- "Cristiano Ronaldo is from Brazil."
-- "Paris est la capitale de l'Allemagne."
+- "Whales are fish."
+- "Accra ni olú-ìlú Nàìjíríà." (Yoruba: Accra is the capital of Nigeria.)
+- "Buenos Aires es la capital de Chile."
 
 Supported correctly, for example:
 
 - "Nelson Mandela became president of South Africa in 1994."
-- "Tuberculosis is caused by a bacterium."
-- "Lisboa é a capital de Portugal."
+- "Kangaroos are marsupials."
+- "Abuja bụ isi obodo Naịjirịa." (Igbo: Abuja is the capital of Nigeria.)
+- "Токио — столица Японии."
 
 What this shows:
 
 - **When VerifAI gives a verdict, it is almost always right.** That comes from the two-source rule.
-- **It often says Unverified on facts any encyclopedia states**, such as "Koalas are marsupials". Usually the reason is that only Wikipedia had a usable passage, so no second independent source took a side. The page then lists what it found. Read "Unverified" as "check this yourself", not as "false".
-- **Citations are its strongest part.** In the same runs, every citation came back with the expected status:
+- **Some true facts still come back Unverified.** In the last set, 6 of 45 did, such as "Python was first released in 1991". Usually only one independent source had a usable passage. The page lists what it found. Read "Unverified" as "check this yourself", not as "false".
+- **Citations are its strongest part.** In every set, each citation came back with the expected status:
   - a real paper, verified;
   - a paper retracted for fraud, retracted;
   - an invented paper, not found;
-  - a real arXiv ID printed with the wrong title, partial match (since then, a DOI registered to a different paper is labelled Wrong paper);
+  - a real arXiv ID printed with another paper's title, wrong paper;
   - a Wikipedia link and an ISBN, verified.
 
   The hand-written citation benchmark scores 16 out of 16.
