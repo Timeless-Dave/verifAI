@@ -94,15 +94,49 @@ button, .masthead-strap, .masthead-nav, .promises, .site-foot, .evidence .source
 .topbar-nav { display: flex; align-items: center; gap: 18px; font: 11.5px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
 .topbar-nav a { text-decoration: none; color: var(--ink-2); }
 .topbar-nav a:hover { color: var(--ink); text-decoration: underline; }
+/* Theme switch: a pill with the sun on the left, the moon on the right, and
+   a knob that slides over whichever is active. */
 .theme-toggle {
-  display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0;
-  background: none; border: 1.5px solid var(--rule-soft); color: var(--ink); cursor: pointer;
+  position: relative; display: inline-flex; align-items: center; justify-content: space-between;
+  width: 62px; height: 32px; padding: 0 8px; border-radius: 999px;
+  background: var(--paper-2); border: 1.5px solid var(--rule-soft); color: var(--ink-3); cursor: pointer;
+  transition: border-color 0.2s;
 }
 .theme-toggle:hover { border-color: var(--rule); }
-.theme-toggle .icon { width: 18px; height: 18px; stroke-width: 2; }
-.theme-sun { display: none; }
-:root[data-theme="dark"] .theme-sun { display: block; }
-:root[data-theme="dark"] .theme-moon { display: none; }
+.theme-toggle:focus-visible { outline: 3px solid var(--marker); outline-offset: 2px; }
+.theme-toggle .icon { position: relative; z-index: 1; width: 15px; height: 15px; stroke-width: 2.2; transition: color 0.3s; }
+.theme-knob {
+  position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--sheet); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 0.35s cubic-bezier(.3, 1.4, .5, 1);
+}
+.theme-sun { color: var(--mixed-ink); }
+:root[data-theme="dark"] .theme-knob { transform: translateX(30px); background: var(--ink); }
+:root[data-theme="dark"] .theme-sun { color: var(--ink-3); }
+:root[data-theme="dark"] .theme-moon { color: var(--paper); }
+
+/* The theme change peels the old page back from the top-right corner.
+   app.js moves --peel-d; the new theme shows through above the fold. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+/* Keeps the transition open while app.js moves the fold; it ends it early. */
+:root.peeling::view-transition-group(root) { animation: peel-hold 1.6s linear; }
+@keyframes peel-hold { from { opacity: 1; } to { opacity: 1; } }
+:root.peeling::view-transition-new(root) {
+  clip-path: polygon(calc(100vw - var(--peel-d, 0px)) 0, 100vw 0, 100vw var(--peel-d, 0px));
+}
+::view-transition-group(peel), ::view-transition-new(peel), ::view-transition-old(peel) { animation: none; }
+.peel { position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; view-transition-name: peel; filter: drop-shadow(-4px 6px 9px rgba(0, 0, 0, 0.3)); }
+.peel-flap {
+  position: absolute; transform-origin: 50% 0; transform: rotate(45deg);
+  /* A rolled curl, not a flat fold: shadow at the fold, a highlight where the
+     paper turns, then its back fading into the roll's underside. */
+  background: linear-gradient(to bottom,
+    var(--flap-edge) 0,
+    var(--flap-back) 10%,
+    var(--flap-light) 38%,
+    var(--flap-back) 70%,
+    var(--flap-under) 100%);
+}
 
 /* Hero: a headline, one line, and a claim being checked */
 .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; align-items: center; padding: 40px 0 34px; border-bottom: 1px solid var(--rule); }

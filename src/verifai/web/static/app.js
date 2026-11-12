@@ -10,25 +10,107 @@
       return;
     }
     var dark = document.documentElement.dataset.theme === "dark";
-    var label = dark ? "Switch to light mode" : "Switch to dark mode";
-    toggle.setAttribute("aria-label", label);
-    toggle.setAttribute("title", label);
+    toggle.setAttribute("aria-checked", dark ? "true" : "false");
+    toggle.setAttribute("title", dark ? "Switch to light mode" : "Switch to dark mode");
   }
+
+  function applyTheme(dark) {
+    if (dark) {
+      document.documentElement.dataset.theme = "dark";
+    } else {
+      delete document.documentElement.dataset.theme;
+    }
+    try {
+      localStorage.setItem("verifai-theme", dark ? "dark" : "light");
+    } catch (error) {
+      // Private windows can refuse storage. The choice still applies now.
+    }
+    showTheme();
+  }
+
+  // Peel the old page back from the top-right corner toward the bottom-left.
+  // The new theme shows through above the fold line while the old page still
+  // covers the rest, so both are on screen until the fold has crossed it.
+  function peelTo(dark) {
+    var root = document.documentElement;
+    var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!document.startViewTransition || still) {
+      applyTheme(dark);
+      return;
+    }
+    var styles = getComputedStyle(root);
+    var back = styles.getPropertyValue("--paper-2").trim() || "#e9e3d5";
+    var light = styles.getPropertyValue("--sheet").trim() || "#f8f5ee";
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+    var travel = width + height;
+    var peel = document.createElement("div");
+    peel.className = "peel";
+    peel.setAttribute("aria-hidden", "true");
+    var flap = document.createElement("div");
+    flap.className = "peel-flap";
+    flap.style.setProperty("--flap-back", back);
+    flap.style.setProperty("--flap-light", light);
+    flap.style.setProperty("--flap-edge", "rgba(0, 0, 0, 0.3)");
+    flap.style.setProperty("--flap-under", styles.getPropertyValue("--rule-soft").trim() || "#cfc7b5");
+    var curl = Math.max(70, Math.min(150, Math.min(width, height) * 0.18));
+    peel.appendChild(flap);
+
+    function place(distance) {
+      // The fold runs from (width - d, 0) to (width, d). The flap is the
+      // peeled corner folded back over the fold, so it reaches (width - d, d).
+      // Only a band beside the fold lifts, like paper curling, so the old
+      // page stays visible past it.
+      var side = distance * Math.SQRT2;
+      var depth = Math.min(side / 2, curl);
+      root.style.setProperty("--peel-d", distance + "px");
+      flap.style.left = width - distance / 2 - side / 2 + "px";
+      flap.style.top = distance / 2 + "px";
+      flap.style.width = side + "px";
+      flap.style.height = depth + "px";
+      flap.style.clipPath =
+        "polygon(0 0, 100% 0, calc(100% - " + depth + "px) 100%, " + depth + "px 100%)";
+    }
+
+    root.classList.add("peeling");
+    root.style.setProperty("--peel-d", "0px");
+    var transition = document.startViewTransition(function () {
+      applyTheme(dark);
+      document.body.appendChild(peel);
+      place(0);
+    });
+    transition.ready.then(function () {
+      var start = performance.now();
+      var duration = 1100;
+      function frame(now) {
+        var t = Math.min(1, (now - start) / duration);
+        var eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        place(eased * travel);
+        if (t < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          finish();
+        }
+      }
+      requestAnimationFrame(frame);
+    }, finish);
+    function finish() {
+      transition.skipTransition();
+    }
+    transition.finished.then(cleanUp, cleanUp);
+    function cleanUp() {
+      root.classList.remove("peeling");
+      root.style.removeProperty("--peel-d");
+      if (peel.parentNode) {
+        peel.parentNode.removeChild(peel);
+      }
+    }
+  }
+
   if (toggle) {
     showTheme();
     toggle.addEventListener("click", function () {
-      var dark = document.documentElement.dataset.theme !== "dark";
-      if (dark) {
-        document.documentElement.dataset.theme = "dark";
-      } else {
-        delete document.documentElement.dataset.theme;
-      }
-      try {
-        localStorage.setItem("verifai-theme", dark ? "dark" : "light");
-      } catch (error) {
-        // Private windows can refuse storage. The choice still applies now.
-      }
-      showTheme();
+      peelTo(document.documentElement.dataset.theme !== "dark");
     });
   }
 
