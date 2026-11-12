@@ -256,7 +256,7 @@ def decide_isbn(citation: ExtractedCitation, outcome: ProviderOutcome | None) ->
     if outcome is None:
         return _result(
             citation,
-            status=CitationStatus.NOT_FOUND,
+            status=CitationStatus.INVALID,
             confidence=CONF_ISBN_BAD_CHECKSUM,
             explanation=(
                 f"ISBN {isbn} fails the ISBN checksum, so no book can have this number. "
@@ -615,6 +615,11 @@ def _doi_explanation(
         tail = f"Confirmed as a registered DOI by {join_and(labels)}, but the citation details do not match the record."
     elif len(positive_sources) >= 2:
         tail = f"Confirmed by {join_and(labels)}."
+        if "crossref" not in {item.source for item in outcomes}:
+            tail += (
+                " Crossref was not asked separately: for a Crossref DOI, doi.org returns "
+                "Crossref's own record."
+            )
     elif down:
         tail = f"Confirmed by {join_and(labels)}. {down}"
     else:
@@ -907,6 +912,7 @@ def _result(
         matched_year=matched.year if matched else None,
         matched_venue=matched.venue if matched else None,
         matched_url=matched_url or (matched.url if matched else None),
+        occurrences=citation.occurrences,
     )
 
 

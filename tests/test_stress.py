@@ -73,7 +73,7 @@ def test_isbn_checksum() -> None:
         kind="isbn", raw="ISBN 978-0-19-999999-9", start=0, end=1, isbn="9780199999999"
     )
     result = decide_isbn(bad, None)
-    assert result.status is CitationStatus.NOT_FOUND
+    assert result.status is CitationStatus.INVALID
     assert "checksum" in result.explanation
     missing = decide_isbn(bad, ProviderOutcome("openlibrary", unavailable=False))
     assert missing.status is CitationStatus.UNREACHABLE

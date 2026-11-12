@@ -119,6 +119,7 @@ class ExtractedCitation:
     et_al: bool = False
     isbn: str | None = None
     pmid: str | None = None
+    occurrences: int = 1
 
 
 def extract_citations(text: str) -> list[ExtractedCitation]:
@@ -448,7 +449,7 @@ def _normalize(text: str) -> str:
 
 
 def _dedupe(items: list[ExtractedCitation]) -> list[ExtractedCitation]:
-    seen: set[tuple[str, str] | tuple[str, str, int]] = set()
+    seen: dict[tuple[str, str] | tuple[str, str, int], ExtractedCitation] = {}
     kept: list[ExtractedCitation] = []
     for item in items:
         key: tuple[str, str] | tuple[str, str, int]
@@ -464,8 +465,9 @@ def _dedupe(items: list[ExtractedCitation]) -> list[ExtractedCitation]:
             folded = re.sub(r"\W+", " ", (item.title or "").casefold()).strip()
             key = ("ref", folded, item.year or 0)
         if key in seen:
+            seen[key].occurrences += 1  # checked once, reported as cited twice
             continue
-        seen.add(key)
+        seen[key] = item
         kept.append(item)
     return kept
 

@@ -24,15 +24,27 @@
         {% endif %}
         {% if item.stance and item.stance != "neutral" %}<span class="chip">{{ item.stance }}</span>{% endif %}
         {% if item.snippet %}<p class="muted">{{ item.snippet }}</p>{% endif %}
+        {% if item.reason %}<p class="reason">{% if item.stance and item.stance != "neutral" %}Why it counts: {% endif %}{{ item.reason }}</p>{% endif %}
       </li>
       {% else %}
       <li class="muted">No passage was retrieved for this claim.</li>
       {% endfor %}
     </ul>
+    {% if "health" in claim.experts %}
+    <p class="banner banner-note">This is not medical advice. It does not diagnose, treat, or recommend care.</p>
+    {% endif %}
   </section>
   {% endfor %}
-  {% if results|selectattr("expert", "equalto", "health")|list %}
-  <p class="banner banner-note">This is not medical advice. It does not diagnose, treat, or recommend care.</p>
+  {% if skipped %}
+  <section class="claim skipped">
+    <h2>Not checked yet</h2>
+    <p>Only the first claims in a paste are checked at once. These were found but not looked at:</p>
+    <ul>{% for item in skipped %}<li>{{ item }}</li>{% endfor %}</ul>
+    <form method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator="#spinner" hx-disabled-elt="find button">
+      <input type="hidden" name="text" value="{{ skipped|join('\n') }}">
+      <button type="submit">Check these {{ skipped|length }} claims</button>
+    </form>
+  </section>
   {% endif %}
   {% endif %}
   {% for result in results %}
@@ -74,6 +86,7 @@
           <td class="cite" data-label="Citation">
             <span class="kind">{{ {"doi": "DOI", "url": "URL", "reference": "Reference", "isbn": "ISBN", "pmid": "PMID"}[citation.kind] }}</span>
             <span class="raw">{{ citation.raw }}</span>
+            {% if citation.occurrences > 1 %}<span class="chip">cited {{ citation.occurrences }}×</span>{% endif %}
           </td>
           <td data-label="Status"><span class="stamp stamp-{{ citation.status.value }}">{{ citation.status_label }}</span></td>
           <td class="num" data-label="Confidence">{{ citation.confidence|pct }}</td>

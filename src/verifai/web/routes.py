@@ -70,6 +70,7 @@ def build_web_router() -> APIRouter:
                 context["verdict"] = bundle.verdict
                 context["confidence"] = bundle.confidence
                 context["explanation"] = bundle.explanation
+                context["skipped"] = list(bundle.claims_skipped)
             except Throttled as refused:
                 context["error"] = refused.message
             except Exception:
@@ -111,6 +112,7 @@ def build_web_router() -> APIRouter:
             explanation=bundle.explanation,
             claims_found=bundle.claims_found,
             claims_checked=bundle.claims_checked,
+            claims_skipped=list(bundle.claims_skipped),
         )
 
     @router.get("/health")

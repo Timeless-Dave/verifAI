@@ -9,7 +9,14 @@ from verifai.corroboration import SourceVote, Stance, corroborate
 from verifai.experts.base import Expert
 from verifai.experts.claim_check import NOT_MEDICAL_ADVICE
 from verifai.experts.router import Router, domains_for
-from verifai.schemas import CombinedClaim, EvidenceItem, ExpertResult, Verdict
+from verifai.schemas import (
+    CitationResult,
+    CitationStatus,
+    CombinedClaim,
+    EvidenceItem,
+    ExpertResult,
+    Verdict,
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +28,7 @@ class CheckBundle:
     explanation: str
     claims_found: int = 0
     claims_checked: int = 0
+    claims_skipped: tuple[str, ...] = ()
 
 
 def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
@@ -35,11 +43,15 @@ def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
         present = [result for result in claim_results if result is not None]
         if present:
             combined.append(combine_claim(claim, present))
+    citations = [
+        item for result in results if result.expert == "citation" for item in result.citations
+    ]
+    combined = [_with_citation_notes(claim, citations) for claim in combined]
     verdict, confidence, explanation = rollup(combined, results)
     if len(subjects) > len(checked):
         explanation = (
             f"{explanation} Only the first {len(checked)} of {len(subjects)} claims found were "
-            "checked. The rest were not looked at, so paste fewer claims at a time to check them."
+            "checked. The others are listed below and can be checked next."
         )
     return CheckBundle(
         results,
@@ -49,7 +61,42 @@ def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
         explanation,
         claims_found=len(subjects),
         claims_checked=len(checked),
+        claims_skipped=tuple(subjects[len(checked) :]),
     )
+
+
+_CITATION_WARNINGS = {
+    CitationStatus.RETRACTED: "is retracted",
+    CitationStatus.NOT_FOUND: "could not be found, so it may be made up",
+    CitationStatus.INVALID: "is not a valid identifier",
+    CitationStatus.PARTIALLY_MATCHES: "does not match the record it points to",
+}
+
+
+def _with_citation_notes(claim: CombinedClaim, citations: list[CitationResult]) -> CombinedClaim:
+    """Say so when the claim's own line cites a bad source.
+
+    "This study proved that the MMR vaccine causes autism" sits after a
+    retracted paper. The claim is still judged on retrieved evidence, but a
+    reader should know what it leans on.
+    """
+    folded = " ".join(claim.claim.casefold().split())
+    notes = [
+        f"The source cited for this claim ({_short(item)}) {_CITATION_WARNINGS[item.status]}."
+        for item in citations
+        if item.status in _CITATION_WARNINGS and folded in " ".join(item.raw.casefold().split())
+    ]
+    if not notes:
+        return claim
+    return claim.model_copy(update={"explanation": f"{claim.explanation} {' '.join(notes)}"})
+
+
+def _short(item: CitationResult) -> str:
+    if item.matched_title:
+        title = item.matched_title
+        return f"“{title[:77]}…”" if len(title) > 80 else f"“{title}”"
+    raw = item.raw
+    return raw[:60] + "…" if len(raw) > 60 else raw
 
 
 def combine_claim(claim: str, results: list[ExpertResult]) -> CombinedClaim:
