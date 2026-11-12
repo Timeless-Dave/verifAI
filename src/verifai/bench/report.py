@@ -46,6 +46,7 @@ class RunMeta:
     limit: int | None
     offline: bool
     verifai_version: str = __version__
+    google_factcheck: bool = False
 
 
 def git_sha(root: Path | None = None) -> str:
@@ -62,7 +63,19 @@ def git_sha(root: Path | None = None) -> str:
         )
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
-    return completed.stdout.strip() or "unknown"
+    sha = completed.stdout.strip() or "unknown"
+    try:
+        status = subprocess.run(  # noqa: S603
+            [git, "status", "--porcelain", "--untracked-files=no"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return sha
+    # Edited tracked files mean the code that ran is not this commit.
+    return f"{sha}-dirty" if status.stdout.strip() else sha
 
 
 def utc_now() -> str:
@@ -95,6 +108,7 @@ def report_payload(result: RunResult, meta: RunMeta) -> dict[str, Any]:
         "seed": meta.seed,
         "limit": meta.limit,
         "offline": meta.offline,
+        "google_factcheck": meta.google_factcheck,
         "label_order": [label.value for label in BenchLabel],
         "macro_f1_note": (
             "Unweighted mean of the three class F1 scores. An undefined class F1 "
@@ -126,6 +140,7 @@ def render_markdown(result: RunResult, meta: RunMeta) -> str:
         f"- Seed: {meta.seed}",
         f"- Requested limit: {_limit_text(meta.limit)}",
         f"- Offline fixtures: {'yes' if meta.offline else 'no'}",
+        f"- Google Fact Check: {'on' if meta.google_factcheck else 'off'}",
         f"- Examples scored: {result.overall.n}",
         "",
     ]

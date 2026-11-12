@@ -102,6 +102,9 @@ def run(args: argparse.Namespace) -> int:
     settings = _settings(args.backend, args.model_id)
     cache = args.cache_dir or default_cache_dir()
     limit = None if args.limit == 0 else args.limit
+    # Record the commit before the run. Code can change during a long run.
+    started = utc_now()
+    sha = git_sha(_repo_root())
     datasets = _load_datasets(args, selected, cache)
     judge = build_judge(settings)
     http: PoliteHttp | None = None
@@ -119,14 +122,15 @@ def run(args: argparse.Namespace) -> int:
             http.close()
     json_path, markdown_path = _output_paths(args, settings.model_backend, args.seed, limit)
     meta = RunMeta(
-        date=utc_now(),
-        git_sha=git_sha(_repo_root()),
+        date=started,
+        git_sha=sha,
         backend=settings.model_backend,
         model_id=_model_id(settings),
         judge_name=getattr(judge, "name", settings.model_backend),
         seed=args.seed,
         limit=limit,
         offline=bool(args.offline),
+        google_factcheck=bool(settings.google_factcheck_api_key) and not args.offline,
     )
     write_report(result, meta, json_path=json_path, markdown_path=markdown_path)
     sys.stdout.write(
