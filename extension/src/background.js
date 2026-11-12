@@ -1,4 +1,8 @@
-importScripts("config.js");
+// Chrome runs this as a service worker and loads config.js here. Firefox
+// runs it as a background script after config.js, listed in the manifest.
+if (typeof importScripts === "function" && !globalThis.VerifaiConfig) {
+  importScripts("config.js");
+}
 
 const config = globalThis.VerifaiConfig;
 const storage = (globalThis.browser || globalThis.chrome).storage;

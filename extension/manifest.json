@@ -3,19 +3,39 @@
   "name": "VerifAI",
   "version": "0.3.0",
   "description": "Check claims on news, health, and chatbot pages against a VerifAI server: your own, or a public one you choose.",
-  "permissions": ["storage"],
+  "homepage_url": "https://useverifai.vercel.app",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "https://useverifai.vercel.app/*",
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
-  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
   "background": {
-    "service_worker": "src/background.js"
+    "service_worker": "src/background.js",
+    "scripts": [
+      "src/config.js",
+      "src/background.js"
+    ]
   },
   "action": {
     "default_title": "VerifAI",
-    "default_popup": "src/popup.html"
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
   },
   "options_ui": {
     "page": "src/options.html",
@@ -23,15 +43,26 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/config.js", "src/heuristic.js", "src/content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/config.js",
+        "src/heuristic.js",
+        "src/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "verifai@localhost",
-      "strict_min_version": "115.0"
+      "id": "verifai@useverifai.vercel.app",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteContent"
+        ]
+      }
     }
   }
 }

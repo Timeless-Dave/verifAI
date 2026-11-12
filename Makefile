@@ -2,7 +2,7 @@ UV ?= uv
 HOST ?= 127.0.0.1
 PORT ?= 8741
 
-.PHONY: install test lint typecheck check run dev extension-test extension-lint bench
+.PHONY: install test lint typecheck check run dev extension-test extension-lint extension-zip bench
 
 # Local only. CI does not run this.
 # make bench BENCH_ARGS="--backend none --limit 50 --seed 0"
@@ -47,3 +47,11 @@ dev: install
 
 bench: install
 	$(UV) run python -m verifai.bench $(BENCH_ARGS)
+
+# The file to upload to the Chrome Web Store, Edge Add-ons, and Firefox Add-ons.
+# -FS keeps the archive in step with the folder, so a rebuild drops removed files.
+EXTENSION_VERSION = $(shell node -p "require('./extension/manifest.json').version")
+extension-zip:
+	mkdir -p dist
+	cd extension && zip -qr -FS ../dist/verifai-extension-$(EXTENSION_VERSION).zip manifest.json src icons -x '*.DS_Store'
+	@ls -la dist/verifai-extension-$(EXTENSION_VERSION).zip

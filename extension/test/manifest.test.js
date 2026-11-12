@@ -9,7 +9,14 @@ test("the manifest is version 3 for Chrome and Firefox", function () {
   );
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.background.service_worker, "src/background.js");
-  assert.equal(manifest.browser_specific_settings.gecko.id, "verifai@localhost");
+  assert.deepEqual(manifest.background.scripts, ["src/config.js", "src/background.js"]);
+  assert.equal(manifest.browser_specific_settings.gecko.id, "verifai@useverifai.vercel.app");
+  assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions, {
+    required: ["websiteContent"],
+  });
+  for (const size of ["16", "32", "48", "128"]) {
+    assert.ok(fs.existsSync(path.join(__dirname, "..", manifest.icons[size])), size);
+  }
   assert.ok(manifest.host_permissions.includes("http://127.0.0.1/*"));
   assert.ok(manifest.host_permissions.includes("https://useverifai.vercel.app/*"));
   assert.deepEqual(manifest.optional_host_permissions, ["https://*/*", "http://*/*"]);
