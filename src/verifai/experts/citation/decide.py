@@ -54,7 +54,7 @@ CONF_ISBN_FOUND = 0.85
 CONF_ISBN_MISSING = 0.40
 CONF_ISBN_BAD_CHECKSUM = 0.95
 
-CONF_URL_LIVE = 0.92
+CONF_URL_LIVE = 0.75
 CONF_URL_ARCHIVED = 0.74
 CONF_URL_ARCHIVED_UNCONFIRMED = 0.70
 CONF_URL_NOT_FOUND = 0.80
@@ -309,6 +309,83 @@ def decide_isbn(citation: ExtractedCitation, outcome: ProviderOutcome | None) ->
     )
 
 
+def decide_pmid(citation: ExtractedCitation, outcome: ProviderOutcome) -> CitationResult:
+    pmid = citation.pmid or ""
+    consulted = [outcome.source]
+    if outcome.unavailable:
+        return _result(
+            citation,
+            status=CitationStatus.UNREACHABLE,
+            confidence=CONF_UNREACHABLE,
+            explanation=f"PubMed did not answer for PMID {pmid}.",
+            consulted=consulted,
+            contributed=[],
+            unavailable=consulted,
+        )
+    if not outcome.records:
+        return _result(
+            citation,
+            status=CitationStatus.NOT_FOUND,
+            confidence=CONF_DOI_NOT_FOUND,
+            explanation=f"PubMed has no record with PMID {pmid}.",
+            consulted=consulted,
+            contributed=consulted,
+            unavailable=[],
+        )
+    record = outcome.records[0]
+    status = CitationStatus.VERIFIED
+    mismatches: list[str] = []
+    if citation.title and record.title:
+        assessment = assess(_query(citation), record)
+        if assessment is None:
+            status = CitationStatus.PARTIALLY_MATCHES
+            mismatches.append(
+                f"PMID {pmid} is “{record.title}”, which does not match the cited title "
+                f"“{citation.title}”."
+            )
+        elif assessment.status != CitationStatus.VERIFIED:
+            status = CitationStatus.PARTIALLY_MATCHES
+            mismatches.extend(assessment.mismatches)
+    elif citation.year or citation.venue:
+        mismatches.extend(_detail_mismatches(citation, record))
+        if mismatches:
+            status = CitationStatus.PARTIALLY_MATCHES
+    explanation = f"PMID {pmid} is “{record.title}” ({_byline(record)}) in PubMed."
+    retraction = _retraction([record])
+    if retraction:
+        status = CitationStatus.RETRACTED
+        explanation = f"{explanation} {retraction}"
+    return _result(
+        citation,
+        status=status,
+        confidence=CONF_DOI_VERIFIED_SINGLE
+        if status is CitationStatus.VERIFIED
+        else CONF_DOI_PARTIAL,
+        explanation=explanation,
+        mismatches=mismatches,
+        consulted=consulted,
+        contributed=consulted,
+        unavailable=[],
+        evidence=_evidence([record], None),
+        links=_links([record]),
+        matched=record,
+    )
+
+
+def _page_record(title: str, url: str | None) -> Record:
+    return Record(
+        source="url",
+        title=title,
+        authors=[],
+        surnames=[],
+        year=None,
+        years=[],
+        venue=None,
+        doi=None,
+        url=url,
+    )
+
+
 def _retraction(records: list[Record]) -> str:
     notices = [notice for record in records if record.retracted for notice in record.notices]
     if not any(record.retracted for record in records):
@@ -348,6 +425,8 @@ def decide_url(
     citation: ExtractedCitation,
     live: UrlCheck,
     wayback: WaybackHit | None,
+    *,
+    page_title: str | None = None,
 ) -> CitationResult:
     if live.blocked_reason:
         return _result(
@@ -371,16 +450,22 @@ def decide_url(
 
     if live.status_code is not None and 200 <= live.status_code < 400:
         final = live.final_url or citation.url
+        named = f" The page is titled “{page_title}”." if page_title else ""
         return _result(
             citation,
             status=CitationStatus.VERIFIED,
             confidence=CONF_URL_LIVE,
-            explanation=f"The URL responded with HTTP {live.status_code}.",
+            explanation=(
+                f"The URL responded with HTTP {live.status_code}.{named} "
+                "This confirms the page exists, not that it is the work the text means. "
+                "The page names no DOI, so its identity was not cross-checked."
+            ),
             consulted=consulted,
             contributed=contributed,
             unavailable=unavailable,
             links=[Link(label="Fetched URL", url=final or citation.url or "")],
             matched_url=final,
+            matched=_page_record(page_title, final) if page_title else None,
         )
 
     # Direct fetch did not confirm the page. Wayback is the fallback, not a

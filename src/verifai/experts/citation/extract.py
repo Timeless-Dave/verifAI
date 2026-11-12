@@ -23,6 +23,7 @@ _ARXIV_RE = re.compile(
     r"(?:\barXiv:\s*|\barxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?",
     re.IGNORECASE,
 )
+_PMID_RE = re.compile(r"\bPMID:?\s*(\d{1,9})\b")
 _ISBN_RE = re.compile(r"\bISBN(?:-1[03])?:?\s*((?:97[89][-\s]?)?(?:\d[-\s]?){9}[\dXx])\b")
 _URL_RE = re.compile(r"https?://[^\s<>\"'\]\[]+", re.IGNORECASE)
 _YEAR_PAREN_RE = re.compile(r"\(((?:19|20)\d{2})\)\.\s+")
@@ -117,6 +118,7 @@ class ExtractedCitation:
     venue: str | None = None
     et_al: bool = False
     isbn: str | None = None
+    pmid: str | None = None
 
 
 def extract_citations(text: str) -> list[ExtractedCitation]:
@@ -161,6 +163,26 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
             continue
         found.append(reference)
         occupied.append((reference.start, reference.end))
+
+    for match in _PMID_RE.finditer(normalized):
+        line_start, line_end = _line_bounds(normalized, match.start(), match.end())
+        line = normalized[line_start:line_end]
+        if _DOI_RE.search(line) or _ARXIV_RE.search(line):
+            continue  # the DOI on this line already identifies the work
+        meta = _parse_bibliographic(line)
+        found.append(
+            ExtractedCitation(
+                kind="pmid",
+                raw=_clip(line.strip()),
+                start=match.start(),
+                end=match.end(),
+                pmid=match.group(1),
+                title=meta.get("title"),
+                year=meta.get("year"),
+                venue=meta.get("venue"),
+                surnames=list(meta.get("surnames") or []),
+            )
+        )
 
     for match in _ISBN_RE.finditer(normalized):
         isbn = re.sub(r"[-\s]", "", match.group(1)).upper()
@@ -436,6 +458,8 @@ def _dedupe(items: list[ExtractedCitation]) -> list[ExtractedCitation]:
             key = ("url", item.url.lower().rstrip("/"))
         elif item.kind == "isbn" and item.isbn:
             key = ("isbn", item.isbn)
+        elif item.kind == "pmid" and item.pmid:
+            key = ("pmid", item.pmid)
         else:
             folded = re.sub(r"\W+", " ", (item.title or "").casefold()).strip()
             key = ("ref", folded, item.year or 0)

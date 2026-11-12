@@ -17,13 +17,21 @@ import logging
 from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from typing import cast
 
 from verifai.config import Settings
 from verifai.evidence.base import EvidenceProvider, EvidenceRegistry
-from verifai.experts.citation.decide import decide_doi, decide_isbn, decide_reference, decide_url
+from verifai.experts.citation.decide import (
+    decide_doi,
+    decide_isbn,
+    decide_pmid,
+    decide_reference,
+    decide_url,
+)
 from verifai.experts.citation.extract import (
     ExtractedCitation,
+    clean_doi,
     dangling_markers,
     extract_citations,
     isbn_valid,
@@ -34,6 +42,7 @@ from verifai.experts.citation.providers.datacite import DataCiteProvider
 from verifai.experts.citation.providers.doi_org import DoiOrgProvider
 from verifai.experts.citation.providers.openalex import OpenAlexProvider
 from verifai.experts.citation.providers.openlibrary import OpenLibraryProvider
+from verifai.experts.citation.providers.pubmed_id import PubMedIdProvider
 from verifai.experts.citation.providers.semantic_scholar import SemanticScholarProvider
 from verifai.experts.citation.providers.url_check import UrlLivenessProvider
 from verifai.experts.citation.providers.wayback import WaybackProvider
@@ -113,6 +122,8 @@ class CitationExpert:
             if not isbn_valid(citation.isbn):
                 return decide_isbn(citation, None)
             return decide_isbn(citation, self._openlibrary().lookup_isbn(citation.isbn))
+        if citation.kind == "pmid" and citation.pmid:
+            return decide_pmid(citation, self._pubmed().lookup_pmid(citation.pmid))
         return self._check_reference(citation)
 
     def _check_doi(self, citation: ExtractedCitation) -> CitationResult:
@@ -167,7 +178,26 @@ class CitationExpert:
             and 200 <= live.status_code < 400
         )
         wayback = None if confirmed or live.blocked_reason else self._wayback().lookup(citation.url)
-        return decide_url(citation, live, wayback)
+        if not confirmed:
+            return decide_url(citation, live, wayback)
+        meta = self._url().page_meta(live.final_url or citation.url)
+        if meta is not None and meta.doi:
+            # The page names the work it holds. Check that work like any DOI,
+            # retraction included, so a live link is not taken on trust.
+            as_doi = replace(citation, doi=clean_doi(meta.doi))
+            result = self._check_doi(as_doi)
+            return result.model_copy(
+                update={
+                    "explanation": (
+                        f"The page at {citation.url} identifies itself as DOI {as_doi.doi}. "
+                        + result.explanation
+                    ),
+                    "matched_url": live.final_url or citation.url,
+                    "sources_consulted": ordered_sources(["url", *result.sources_consulted]),
+                    "sources_contributed": ordered_sources(["url", *result.sources_contributed]),
+                }
+            )
+        return decide_url(citation, live, wayback, page_title=meta.title if meta else None)
 
     def _doi(self) -> DoiOrgProvider:
         return cast("DoiOrgProvider", self._providers["doi.org"])
@@ -186,6 +216,9 @@ class CitationExpert:
 
     def _wayback(self) -> WaybackProvider:
         return cast("WaybackProvider", self._providers["wayback"])
+
+    def _pubmed(self) -> PubMedIdProvider:
+        return cast("PubMedIdProvider", self._providers["pubmed"])
 
     def _openlibrary(self) -> OpenLibraryProvider:
         return cast("OpenLibraryProvider", self._providers["openlibrary"])
@@ -206,6 +239,7 @@ def build_citation_expert(http: PoliteHttp, settings: Settings) -> CitationExper
         UrlLivenessProvider(http),
         WaybackProvider(http),
         OpenLibraryProvider(http),
+        PubMedIdProvider(http, email=settings.mailto),
     ]
     if settings.semantic_scholar_api_key:
         providers.append(SemanticScholarProvider(http, api_key=settings.semantic_scholar_api_key))

@@ -72,7 +72,7 @@
         <tr class="row-{{ citation.status.value }}">
           <td class="num" data-label="#">{{ loop.index }}</td>
           <td class="cite" data-label="Citation">
-            <span class="kind">{{ {"doi": "DOI", "url": "URL", "reference": "Reference", "isbn": "ISBN"}[citation.kind] }}</span>
+            <span class="kind">{{ {"doi": "DOI", "url": "URL", "reference": "Reference", "isbn": "ISBN", "pmid": "PMID"}[citation.kind] }}</span>
             <span class="raw">{{ citation.raw }}</span>
           </td>
           <td data-label="Status"><span class="stamp stamp-{{ citation.status.value }}">{{ citation.status_label }}</span></td>
