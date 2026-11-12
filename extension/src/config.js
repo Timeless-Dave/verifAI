@@ -6,9 +6,9 @@
     root.VerifaiConfig = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  // The public server checks citations fully. It has no local model, so
-  // claims list their sources and stay unverified. A VerifAI running on this
-  // computer (LOCAL_SERVER) also judges claims.
+  // The public server checks citations and judges claims with a hosted
+  // model, so it works with no setup. A VerifAI running on this computer
+  // (LOCAL_SERVER) does the same with nothing leaving the machine.
   const DEFAULT_SERVER = "https://useverifai.vercel.app";
   const LOCAL_SERVER = "http://127.0.0.1:8741";
 

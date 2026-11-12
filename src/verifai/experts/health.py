@@ -11,6 +11,7 @@ from verifai.experts.claim_check import NOT_MEDICAL_ADVICE, check_claim
 from verifai.http import PoliteHttp
 from verifai.models.judge import Judge
 from verifai.retrieval.europepmc import EuropePMCRetriever
+from verifai.retrieval.google_factcheck import GoogleFactCheckRetriever
 from verifai.retrieval.pubmed import PubMedRetriever
 from verifai.retrieval.types import Retriever
 from verifai.schemas import ExpertResult
@@ -20,7 +21,8 @@ class HealthExpert:
     name = "health"
     description = (
         "Checks a health or science claim against PubMed and Europe PMC, "
-        "preferring systematic reviews. This is not medical advice."
+        "preferring systematic reviews, and Google Fact Check when it is "
+        "configured. This is not medical advice."
     )
 
     def __init__(
@@ -55,4 +57,8 @@ def build_health_expert(http: PoliteHttp, settings: Settings, judge: Judge) -> H
         PubMedRetriever(http, email=settings.mailto),
         EuropePMCRetriever(http),
     ]
+    # Health myths ("vaccines cause autism") are what fact-checkers review
+    # most. Their reviews still count as one source, beside the literature.
+    if settings.google_factcheck_api_key:
+        retrievers.append(GoogleFactCheckRetriever(http, settings.google_factcheck_api_key))
     return HealthExpert(retrievers, judge, max_concurrency=settings.max_concurrency)

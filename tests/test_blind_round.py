@@ -109,3 +109,16 @@ def test_an_attribute_phrase_falls_back_to_its_object(polite_http, http_mock):
     http_mock.get("https://www.wikidata.org/w/api.php").mock(side_effect=api)
     found = WikidataRetriever(polite_http).retrieve("The chemical symbol for gold is Ag.")
     assert found.passages[0].text == "gold (chemical element). element symbol: Au."
+
+
+def test_health_reads_fact_checks_only_when_a_key_is_set(polite_http):
+    from tests.conftest import make_settings
+
+    from verifai.experts.health import build_health_expert
+    from verifai.models.judge import NullJudge
+
+    without = build_health_expert(polite_http, make_settings(), NullJudge())
+    assert without.registry.names() == ["pubmed", "europepmc"]
+    keyed = make_settings(google_factcheck_api_key="k")
+    with_key = build_health_expert(polite_http, keyed, NullJudge())
+    assert with_key.registry.names() == ["pubmed", "europepmc", "google_factcheck"]
