@@ -138,6 +138,12 @@ def extract_citations(text: str) -> list[ExtractedCitation]:
             continue
         line_start, line_end = _line_bounds(normalized, match.start(), match.end())
         raw_line = normalized[line_start:line_end].strip()
+        # Consecutive lines are joined so a wrapped reference reads as one.
+        # A list of references with one per line must not be read as one, or
+        # every DOI takes the first line's title and year.
+        crowded = sum(1 for other, _ in dois if line_start <= other.start() < line_end) > 1
+        if crowded:
+            raw_line = _original_line(text, match.group(0)) or raw_line
         meta = _parse_bibliographic(raw_line)
         found.append(
             ExtractedCitation(
@@ -532,3 +538,11 @@ def dangling_markers(text: str) -> list[str]:
         if label not in found:
             found.append(label)
     return found
+
+
+def _original_line(text: str, token: str) -> str | None:
+    """The line of the paste, before joining, that holds ``token``."""
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if token in line:
+            return line.strip()
+    return None

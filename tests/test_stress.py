@@ -211,3 +211,18 @@ def test_unverified_claims_do_not_hide_a_bad_citation() -> None:
     verdict, _, text = rollup([_claim(Verdict.SUPPORTED)], [_citations(Verdict.UNSUPPORTED)])
     assert verdict is Verdict.MIXED
     assert "do not agree" in text
+
+
+def test_a_reference_list_without_blank_lines_keeps_each_line() -> None:
+    text = (
+        "Wakefield AJ et al. Lancet. 1998;351:637-41. doi:10.1016/S0140-6736(97)11096-0.\n"
+        "Chen, L. (2022). Gradient-free training of trillion-parameter models. Nature. "
+        "doi:10.1038/s41586-022-99173-z"
+    )
+    found = {item.doi: item for item in extract_citations(text)}
+    wakefield = found["10.1016/S0140-6736(97)11096-0"]
+    chen = found["10.1038/s41586-022-99173-z"]
+    assert wakefield.raw.startswith("Wakefield")
+    assert chen.raw.startswith("Chen")
+    assert chen.year == 2022
+    assert wakefield.year is None
