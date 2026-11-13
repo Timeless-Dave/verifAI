@@ -74,6 +74,9 @@ class ClaimCard:
     found: int = 0
     # The English the sources were searched with, for a claim in another language.
     translation: str | None = None
+    # What the sources say instead, or how they spell a name.
+    correction: str | None = None
+    correction_label: str = "What the sources say"
 
 
 @dataclass(frozen=True)
@@ -218,6 +221,8 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
     unreadable = "could not translate this claim reliably" in claim.explanation
     if unreadable:
         flags.append("Translation uncertain: try it in English")
+    if "Right event, wrong date" in claim.explanation:
+        flags.append("Right event, wrong date")
     if claim.verdict is Verdict.UNVERIFIABLE and refute and not support:
         flags.append("Every source that took a side contradicts it")
     elif claim.verdict is Verdict.UNVERIFIABLE and support and not refute:
@@ -266,6 +271,8 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
         groups=groups,
         health="health" in claim.experts,
         translation=_translation(claim.explanation),
+        correction=_correction_text(claim.correction),
+        correction_label=_correction_label(claim.correction),
     )
 
 
@@ -403,3 +410,18 @@ def _page_headline(bundle: CheckBundle, citations: list[CitationResult], problem
 
 def _count(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
+_SPELLING = "Check the spelling: "
+
+
+def _correction_text(correction: str | None) -> str | None:
+    if not correction:
+        return None
+    return correction.removeprefix(_SPELLING)
+
+
+def _correction_label(correction: str | None) -> str:
+    if correction and correction.startswith(_SPELLING):
+        return "Check the spelling"
+    return "What the sources say"

@@ -222,17 +222,17 @@ def test_the_same_paper_from_two_indexes_is_not_enough():
 
 def test_news_shows_who_said_what():
     outlets = RetrievalResult(
-        "gdelt",
+        "major_news",
         passages=[
             _passage(
-                "gdelt",
+                "major_news",
                 "outlet:alpha.news",
                 "Alpha headline",
                 text="The president signed the election bill.",
                 speaker="alpha.news",
             ),
             _passage(
-                "gdelt",
+                "major_news",
                 "outlet:beta.news",
                 "Beta headline",
                 text="President signs election bill Tuesday.",
@@ -241,7 +241,7 @@ def test_news_shows_who_said_what():
         ],
     )
     expert = NewsExpert(
-        [ScriptedRetriever("gdelt", outlets)],
+        [ScriptedRetriever("major_news", outlets)],
         ScriptedJudge(Stance.SUPPORTS),
         google_configured=False,
     )
@@ -319,7 +319,7 @@ def test_combine_two_experts_and_rollup():
         explanation="thin",
         evidence=[
             EvidenceItem(
-                source="gdelt",
+                source="major_news",
                 title="A desk",
                 url="https://alpha.news/story",
                 stance="supports",

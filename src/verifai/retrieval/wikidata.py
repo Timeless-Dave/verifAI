@@ -546,7 +546,34 @@ def _best(statements: object) -> list[dict[str, Any]]:
     # A position held or an award is a history, not one current value.
     if preferred and not any("qualifiers" in item for item in usable):
         return preferred
+    # Only a few values are shown, so what holds now comes first, then the
+    # newest: the United States' head of government today, not George
+    # Washington, and its latest population, not the 1790 census.
+    if any(_when(item) for item in usable):
+        return sorted(usable, key=lambda item: (not _ongoing(item), _when(item)))
     return usable
+
+
+def _when(statement: dict[str, Any]) -> str:
+    """The start or point-in-time of a statement, as a sortable key (newest smallest)."""
+    qualifiers = _dict(statement.get("qualifiers"))
+    for prop in ("P580", "P585", "P582"):
+        for snak in qualifiers.get(prop) or []:
+            data = snak.get("datavalue") if isinstance(snak, dict) else None
+            value = data.get("value") if isinstance(data, dict) else None
+            stamp = str(value.get("time", "")) if isinstance(value, dict) else ""
+            match = re.match(r"\+(\d{4,})-(\d\d)-(\d\d)", stamp)
+            if match:
+                year, month, day = match.groups()
+                # Inverted so an ascending sort puts the newest first.
+                return f"{99999 - int(year):05d}{99 - int(month):02d}{99 - int(day):02d}"
+    return "~"
+
+
+def _ongoing(statement: dict[str, Any]) -> bool:
+    """Started and not ended: an office still held, a marriage still current."""
+    qualifiers = _dict(statement.get("qualifiers"))
+    return bool(qualifiers.get("P580")) and not qualifiers.get("P582")
 
 
 def _statement_text(statement: dict[str, Any], labels: dict[str, str]) -> str:
@@ -560,6 +587,8 @@ def _statement_text(statement: dict[str, Any], labels: dict[str, str]) -> str:
         for snak in (qualifiers.get(prop) or [])[:1]
         if (text := _value_text(snak, labels))
     ]
+    if _ongoing(statement):
+        extra.append("to the present")
     return f"{main} ({', '.join(extra)})" if extra else main
 
 

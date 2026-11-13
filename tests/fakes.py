@@ -133,9 +133,12 @@ def install(
         "factchecktools.googleapis.com",
         "eutils.ncbi.nlm.nih.gov",
         "www.ebi.ac.uk",
-        "api.gdeltproject.org",
+        "www.federalregister.gov",
     ):
         router.get(host=host).mock(side_effect=empty)
+    router.get(host="news.google.com").mock(
+        return_value=httpx.Response(200, text="<rss><channel></channel></rss>")
+    )
 
 
 def _datacite_title(query: str) -> str:

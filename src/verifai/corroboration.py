@@ -39,6 +39,8 @@ class SourceVote:
     url: str | None = None
     title: str | None = None
     detail: str = ""
+    # The newsroom or agency behind it, named in place of the index it came from.
+    speaker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,7 @@ class IndependentSource:
     confidence: float
     sources: tuple[str, ...]
     titles: tuple[str, ...]
+    speaker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -152,12 +155,14 @@ def _reduce(members: list[SourceVote]) -> IndependentSource | None:
     confidence = share * sum(_bounded(member.confidence) for member in members) / len(members)
     sources = tuple(dict.fromkeys(member.source for member in members))
     titles = tuple(dict.fromkeys(member.title for member in members if member.title))
+    speakers = {member.speaker for member in members if member.speaker}
     return IndependentSource(
         key=key,
         stance=stance,
         confidence=confidence,
         sources=sources,
         titles=titles,
+        speaker=speakers.pop() if len(speakers) == 1 and key.startswith(_NAMED) else None,
     )
 
 
@@ -310,8 +315,13 @@ def _name_list(groups: tuple[IndependentSource, ...]) -> str:
     return ", ".join(names[:-1]) + f", and {names[-1]}"
 
 
+# Families where each member is a named newsroom or agency: "NPR", not
+# "Major news outlets", says who reported it.
+_NAMED = ("family:outlet:", "family:gov:")
+
+
 def _describe(group: IndependentSource) -> str:
-    labels = [source_label(name) for name in group.sources]
+    labels = [group.speaker] if group.speaker else [source_label(name) for name in group.sources]
     if len(labels) == 1:
         label = labels[0]
     elif len(labels) == 2:

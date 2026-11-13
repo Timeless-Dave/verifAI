@@ -29,7 +29,11 @@ _NEWS = re.compile(
     r"\b(elections?|presidents?|prime ministers?|parliaments?|senators?|congress|"
     r"campaigns?|ballots?|votes?|voted|ministers?|governments?|protests?|"
     r"wars?|invasions?|sanctions?|democrats?|republicans?|politic\w*|scandals?|"
-    r"indict\w*|white house|kremlin|governors?|legislation)\b",
+    r"indict\w*|white house|kremlin|governors?|legislation|"
+    # Who holds an office now, and what just happened: newsrooms know first.
+    r"current(?:ly)?|incumbent|midterms?|speaker|popes?|resign\w*|elected|"
+    r"invade[sd]?|inaugurat\w*|impeach\w*|tariffs?|executive orders?|"
+    r"supreme court|federal|fda|cdc|nih|recalls?|approved)\b",
     re.IGNORECASE,
 )
 

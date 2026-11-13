@@ -8,8 +8,9 @@ from verifai.experts.claim_check import check_claim, google_note
 from verifai.http import PoliteHttp
 from verifai.models.judge import Judge
 from verifai.retrieval.current_events import CurrentEventsRetriever
-from verifai.retrieval.gdelt import GdeltRetriever
+from verifai.retrieval.federal_register import FederalRegisterRetriever
 from verifai.retrieval.google_factcheck import GoogleFactCheckRetriever
+from verifai.retrieval.news_search import build_major_news, build_us_government
 from verifai.retrieval.pages import PageRetriever
 from verifai.retrieval.types import Retriever
 from verifai.retrieval.wikidata import WikidataRetriever
@@ -20,9 +21,10 @@ from verifai.schemas import ExpertResult
 class NewsExpert:
     name = "news"
     description = (
-        "Checks a news or politics claim against Google Fact Check reviews, "
-        "GDELT outlets, Wikipedia current events, and article pages. "
-        "Each record names who said it and links the source."
+        "Checks a news or politics claim against established newsrooms (AP, Reuters, "
+        "the BBC, NPR, and others), official US government sites such as the White "
+        "House and the FDA, the Federal Register, Google Fact Check reviews, Wikipedia, "
+        "and linked pages. Each outlet and each agency counts as its own source."
     )
 
     def __init__(
@@ -56,7 +58,9 @@ class NewsExpert:
 
 def build_news_expert(http: PoliteHttp, settings: Settings, judge: Judge) -> NewsExpert:
     retrievers: list[Retriever] = [
-        GdeltRetriever(http),
+        build_major_news(http),
+        build_us_government(http),
+        FederalRegisterRetriever(http),
         CurrentEventsRetriever(http),
         WikipediaRetriever(http),
         WikidataRetriever(http),

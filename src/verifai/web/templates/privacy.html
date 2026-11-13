@@ -7,7 +7,7 @@
   <h2>What is sent</h2>
   <ul>
     <li>The text you paste, or that you ask the extension to check, is sent to the VerifAI server you use. The default server is https://useverifai.vercel.app. You can point the extension at a VerifAI server on your own computer instead.</li>
-    <li>To check that text, the server sends short pieces of it, such as DOIs, titles, links, and search terms, to public sources: Crossref, OpenAlex, DataCite, doi.org, PubMed, Europe PMC, Open Library, Wikipedia, Wikidata, GDELT, the Wayback Machine, and, when configured, Google Fact Check.</li>
+    <li>To check that text, the server sends short pieces of it, such as DOIs, titles, links, and search terms, to public sources: Crossref, OpenAlex, DataCite, doi.org, PubMed, Europe PMC, Open Library, Wikipedia, Wikidata, Google News (to find reports from established newsrooms and US government sites), the Federal Register, the Wayback Machine, and, when configured, Google Fact Check.</li>
     <li>To judge whether a source supports a claim, the public site sends the claim and short passages from the sources to an open-weights AI model run by Cloudflare Workers AI. Cloudflare states that it does not use this data to train models. VerifAI running on your own computer judges claims locally and sends nothing to an AI service.</li>
     <li>Your IP address reaches the server, as it does with any website. It is used only to limit how many checks one address can run.</li>
   </ul>

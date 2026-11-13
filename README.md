@@ -27,7 +27,7 @@ VerifAI is a tool for reading, not an oracle. It does not replace opening the so
 
 ## What it checks
 
-**Claims**, meaning sentences that state a fact: "The Nile flows into the Mediterranean Sea.", "Vaccines cause autism.", "Germany won the 2014 FIFA World Cup."
+**Claims**, meaning sentences that state a fact: "The Nile flows into the Mediterranean Sea.", "Vaccines cause autism.", "Germany won the 2014 FIFA World Cup.", "Democrats win full control of Congress.", "Jensen Huang resigned today."
 
 **Citations**, meaning anything that points at a published work or page:
 
@@ -54,6 +54,10 @@ VerifAI is a tool for reading, not an oracle. It does not replace opening the so
 
 Each claim card shows how many sources supported it, contradicted it, or were not about it, a confidence bar, and a one-line reason from each source.
 
+**Corrections.** When the sources contradict a claim, the card says what they say instead, in one line: "Nvidia is based in Seattle" is refuted, with "What the sources say: Nvidia is based in Santa Clara, California." The line is written only from the contradicting sources, and every number and name in it must appear in them; otherwise no correction is shown rather than a guess. A name the sources spell differently is pointed out even when the claim is right ("Barak Obama" → "Barack Obama").
+
+**Today, yesterday, this week.** Relative dates are read against the day of the check. "Jensen Huang resigned today", checked on 13 November 2026, is judged as "resigned on 13 November 2026". When the sources report the same event on another day, the card is flagged **Right event, wrong date** and the correction gives the date they report.
+
 A claim that cites a reference (`… as shown by Mehra et al. [15]`) is flagged when that reference turns out to be retracted. An ambiguous date such as `9/11/1989` is flagged too, because it reads differently in the US and elsewhere.
 
 ### Citations
@@ -74,27 +78,33 @@ Confidence is how sure VerifAI is of that verdict, from 0 to 100%. It is not the
 
 ## How a check works
 
-1. **Split.** The paste is cleaned: zero-width characters are removed, DOIs broken across lines are rejoined, and look-alike characters are noted. It is then split into claims and citations. A claim that is not in English is translated into English, so that English sources can be searched. Two different models translate it (Llama 3.3 70B and Qwen3 on the public site), and the two translations must make the same claim. If they disagree, VerifAI counts no source for that claim, marks the translation as uncertain, and asks for the claim in English. A guessed translation is never trusted: in testing, a single model once added a "not" to a Yoruba sentence. The claim's own Wikipedia edition is still searched in its own words, and the card shows the English it was read as.
+1. **Split.** The paste is cleaned: zero-width characters are removed, DOIs broken across lines are rejoined, and look-alike characters are noted. It is then split into claims and citations. A claim that is not in English is translated into English, so that English sources can be searched. Two different models translate it (Llama 3.3 70B and Gemma 4 on the public site), and the two translations must make the same claim. If they disagree, VerifAI counts no source for that claim, marks the translation as uncertain, and asks for the claim in English. A guessed translation is never trusted: in testing, a single model once added a "not" to a Yoruba sentence. The claim's own Wikipedia edition is still searched in its own words, and the card shows the English it was read as.
 2. **Route.** Each claim goes to the checker that fits it. A sentence can go to more than one.
 
    | Checker | Sources | Used for |
    | --- | --- | --- |
    | General | Wikipedia, Wikidata, Google Fact Check, pages linked in the paste | Everyday facts |
-   | Health and science | PubMed and Europe PMC (systematic reviews first), Google Fact Check | Medical and scientific wording. Every result says it is not medical advice |
-   | News and politics | Google Fact Check, GDELT news articles, Wikipedia current events, linked articles | Elections, governments, current events |
+   | Health and science | PubMed and Europe PMC (systematic reviews first), Wikipedia, US federal health agencies (FDA, CDC, NIH, HHS), Google Fact Check | Medical and scientific wording. Every result says it is not medical advice |
+   | News and politics | Major newsrooms, official US government sites, the Federal Register, Google Fact Check, Wikipedia and its current events, Wikidata, linked articles | Elections, governments, who holds an office now, anything "today" or "this week" |
    | Citation | doi.org, Crossref, OpenAlex, DataCite, PubMed, Open Library, a direct fetch, the Internet Archive | DOIs, links, references, arXiv, PMID, PMC, ISBN |
 
-3. **Retrieve.** Each source is asked at check time. Nothing comes from a language model's memory. Wikipedia opens the article the claim names, as well as its search results. Wikidata picks the item that fits the claim: the river Nile, not the band named Nile; Michael I. Jordan the computer scientist, not the basketball player; the bat, not the French village called Bats. It then shows the item's key facts: dates, places, creators, heights, winners, heads of state, official languages, what a thing is made of, and, for a living thing, its whole classification, so "Dolphins are mammals" can be checked.
+3. **Retrieve.** Each source is asked at check time. Nothing comes from a language model's memory.
+   - **Newsrooms.** Headlines from about 60 established newsrooms: wire services (AP, Reuters, AFP), US papers and broadcasters (The New York Times, The Washington Post, The Wall Street Journal, NPR, PBS, NBC, CBS, ABC, CNN, Fox News, Bloomberg, Politico, and others), and international ones (BBC, The Guardian, Financial Times, Al Jazeera, DW, CBC, NHK, The Hindu, Premium Times, News24, and others). Google News is only the index. Blogs, unknown sites, and opinion columns are left out. The last 30 days are searched first, so a check reflects what is true now; older reporting fills in for settled history. Each headline carries its date, and one older than about six weeks says how old it is, so an old report is read as old news.
+   - **Government.** Official statements from US federal sites: the White House, FDA, CDC, NIH, HHS, Congress, the Senate and House, the Supreme Court, and the Departments of Justice, State, Defense, Treasury, Agriculture, and others. And the **Federal Register**, the government's official journal of rules, proposed rules, notices, and executive orders, with each document's summary. Wikipedia opens the article the claim names, as well as its search results. Wikidata picks the item that fits the claim: the river Nile, not the band named Nile; Michael I. Jordan the computer scientist, not the basketball player; the bat, not the French village called Bats. It then shows the item's key facts: dates, places, creators, heights, winners, heads of state, official languages, what a thing is made of, and, for a living thing, its whole classification, so "Dolphins are mammals" can be checked.
 4. **Judge.** An AI model reads each retrieved passage beside the claim and says whether that passage supports it, contradicts it, or is not about it, with one line of reason. It judges only the text in front of it.
    - The model is told to ignore any instructions inside the claim or the evidence.
    - It treats a different person with the same name as not about the claim.
    - It treats a missing fact as not about the claim, rather than as a contradiction.
+   - It reads a dated report as describing its own time, and a headline that asks, forecasts, or reports a poll as not saying the thing happened.
+   - It is told its own memory is out of date and the evidence wins. Wikidata lists what holds now first ("President of the United States, from 20 January 2025, to the present") so the present is in front of it.
+   - On the public site the judge is Gemma 4 (26B, April 2026). Older models refuted "Donald Trump is the president" against his own Wikipedia article, because their training ended before January 2025.
    - A relevance check throws out passages that do not share the claim's key terms.
 5. **Corroborate.** A verdict needs **two independent sources that agree**. This rule is the core of VerifAI. It lives in `src/verifai/corroboration.py`, and every claim checker uses it.
    - Wikipedia counts as one source, however many articles were read. Wikidata is a separate source.
    - Google Fact Check counts as one source, however many reviews it returns.
    - The same paper found in PubMed and Europe PMC is one source. Two different papers are two.
-   - In GDELT, each news outlet is its own source.
+   - Each newsroom is its own source, and so is each government agency: three newsrooms reporting a result are three sources. The explanation names them ("NPR, NBC News, and Reuters agree").
+   - The Federal Register is one source, however many of its documents match.
    - One source on each side is not agreement. Within one source, a 2-to-1 majority of different documents decides that source's side.
 6. **Report.** The page leads with the overall verdict, then each claim, then each citation. Long pastes are checked in batches, and the next batch starts by itself.
 
@@ -112,6 +122,15 @@ These numbers come from live tests of the public site on 12 November 2026. Each 
 | 4th: after translation for other languages | 45 | 26 (58%) | 1 (a mistranslation, since fixed) | 18 |
 | 5th: after two-model translation and the classification fixes | 45 | 36 (80%) | 0 | 9 |
 | **6th: after Wikidata was counted once and translation was tuned** | **45** | **39 (87%)** | **0** | **6** |
+
+**Current affairs, 13 November 2026.** After the news sources were added, the sixth set was rerun with 15 current-affairs claims added (60 in all), once with each judge model. The answer to each was checked against news reports first.
+
+| Judge | Right verdict | Wrong verdict | Unverified | Current affairs right |
+| --- | --- | --- | --- | --- |
+| Qwen3 30B (the previous judge) | 46 | 4 | 10 | 8 of 15 |
+| **Gemma 4 26B (now the judge)** | **47** | **0** | **13** | **10 of 15** |
+
+All four wrong verdicts from the previous judge came from its stale memory: it refuted "Donald Trump is the president of the United States", "Donald Trump won the 2024 presidential election", "Andy Burnham is the prime minister of the United Kingdom", and "Leo XIV is the current pope", each against sources that said so. Supported correctly now, for example: "Democrats win full control of Congress." (AP News and NBC News). Refuted with a correction: "Andy Burnham became prime minister yesterday." ("…on 20 July 2026").
 
 **Topics covered:** science, history, geography, health, technology, culture, numbers, animal classification, and myths.
 
@@ -155,7 +174,8 @@ What this shows:
 On the public site (https://useverifai.vercel.app):
 
 - What you paste is sent to the public sources listed above to look things up.
-- To judge passages, the claim and short passages from its sources go to an open-weights model (Qwen3 30B) run by Cloudflare Workers AI. Cloudflare states that it does not use this data to train models.
+- The key words of a news claim are searched on Google News, which indexes the newsrooms and government sites.
+- To judge passages, the claim and short passages from its sources go to an open-weights model (Gemma 4 26B) run by Cloudflare Workers AI. Cloudflare states that it does not use this data to train models.
 - Nothing you paste is stored in a database, and there are no accounts. Rate limits count requests per network address, in memory only.
 - The full statement is at [/privacy](https://useverifai.vercel.app/privacy).
 
@@ -262,7 +282,7 @@ Every setting is an environment variable, or a line in `.env`. `.env.example` li
 | `VERIFAI_HOST`, `VERIFAI_PORT` | `127.0.0.1`, `8741` | Where the server listens. |
 | `VERIFAI_MODEL_BACKEND` | `auto` | The judge: `auto`, `hosted`, `mlx`, `ollama`, `llamacpp`, `nli`, `remote`, or `none`. |
 | `VERIFAI_HOSTED_BASE_URL`, `VERIFAI_HOSTED_API_KEY` | empty | OpenAI-compatible API for `hosted`. |
-| `VERIFAI_HOSTED_MODEL` | `@cf/qwen/qwen3-30b-a3b-fp8` | Model for `hosted`. |
+| `VERIFAI_HOSTED_MODEL` | `@cf/google/gemma-4-26b-a4b-it` | Model for `hosted`. Reasoning is switched off for each judgment. |
 | `VERIFAI_MLX_MODEL` | `mlx-community/Qwen3.5-9B-4bit` | Weights for `mlx`. |
 | `VERIFAI_OLLAMA_BASE_URL`, `VERIFAI_OLLAMA_MODEL` | `http://127.0.0.1:11434`, `qwen3.5:9b` | Ollama. |
 | `VERIFAI_LLAMACPP_BASE_URL`, `VERIFAI_LLAMACPP_MODEL` | `http://127.0.0.1:8080/v1`, `qwen3.5-9b` | llama.cpp server. |
@@ -318,7 +338,9 @@ src/verifai/
   corroboration.py     the two-source rule
   http.py              polite HTTP: User-Agent, timeouts, retries, cache, private-address guard
   models/              judges: hosted, MLX, Ollama, llama.cpp, NLI, remote, and the judge prompt
-  retrieval/           Wikipedia, Wikidata, Google Fact Check, PubMed, Europe PMC, GDELT, pages
+  retrieval/           Wikipedia, Wikidata, Google Fact Check, PubMed, Europe PMC, newsrooms and
+                       US government sites (news_search), Federal Register, pages
+  dates.py             "today", "yesterday", "this week" read as calendar dates
   experts/             the general, health, news, and citation checkers
   web/                 pages (Jinja and htmx), styles, rate limits
 api/index.py           Vercel entry point
@@ -334,6 +356,9 @@ See `CONTRIBUTING.md` before changing how verdicts are reached, and `SECURITY.md
 
 - **Many true claims stay unverified.** A verdict needs two independent sources. For general knowledge, often only Wikipedia has a usable passage, and Wikidata stores structured facts (dates, places, creators), not statements like "bats are not blind". This is the price of rarely being wrong.
 - **Other languages depend on a translation.** A claim that is not in English is checked through its English translation, which the card shows. Two models must agree on that translation, so a mistranslation usually ends as "Translation uncertain" rather than a wrong verdict. When both models make the same mistake, it can still mislead. Rare languages and slang are the riskiest. Read the translation shown on the card.
+- **News is read from headlines.** Newsrooms are judged on their headline and date, not the full article, which keeps a check fast but misses detail a headline leaves out. A breaking story can also be unverified for an hour or two until enough newsrooms report it.
+- **The government sources are American.** Other countries' official sites are not searched yet, though their newsrooms are.
+- **An encyclopedia can lag the news.** Right after a change (a new prime minister), Wikipedia and Wikidata may still say the old thing while newsrooms say the new one, and the claim comes back Mixed until they catch up.
 - **The AI judge can misread a passage.** The two-source rule limits the damage: one misread passage cannot decide a verdict.
 - **Wikipedia search can still pick a side article.** For example, it might pick an article about a disease's history when the claim is about its cause. Opening the article the claim names reduces this but does not remove it.
 - **A verified citation exists, but VerifAI does not read the paper.** It may still be irrelevant to the claim or misquoted.

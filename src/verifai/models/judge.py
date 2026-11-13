@@ -21,8 +21,10 @@ from verifai.corroboration import Stance
 from verifai.models.parsing import (
     Judgment,
     agreement_prompt,
+    correction_prompt,
     judgment_prompt,
     map_nli_rows,
+    parse_correction,
     parse_judgment,
     parse_translation,
     parse_yes,
@@ -83,6 +85,15 @@ class GenerativeJudge:
             )
         return parse_judgment(raw)
 
+    def correct(self, claim: str, evidence: list[str]) -> str | None:
+        """What the contradicting sources say instead, or None."""
+        if self._complete is None or not evidence:
+            return None
+        try:
+            return parse_correction(self._complete(correction_prompt(claim, evidence)), claim)
+        except (OSError, TimeoutError, ValueError, RuntimeError, httpx.HTTPError):
+            return None
+
     def translate(self, text: str) -> str | None:
         """The claim in English, for searching sources. None if it cannot be trusted.
 
@@ -118,6 +129,15 @@ def translate_with(judge: object, text: str) -> str | None:
     if not callable(translate):
         return None
     result = translate(text)
+    return result if isinstance(result, str) else None
+
+
+def correct_with(judge: object, claim: str, evidence: list[str]) -> str | None:
+    """Ask any judge that can write a correction. NLI cannot."""
+    correct = getattr(judge, "correct", None)
+    if not callable(correct):
+        return None
+    result = correct(claim, evidence)
     return result if isinstance(result, str) else None
 
 
@@ -225,6 +245,9 @@ class OllamaJudge(GenerativeJudge):
 class HostedJudge(GenerativeJudge):
     """An open-weights model served behind an OpenAI-compatible chat API."""
 
+    # A hosted API answers several requests at once; a local model does not.
+    concurrent = True
+
     def __init__(
         self,
         base_url: str,
@@ -233,6 +256,7 @@ class HostedJudge(GenerativeJudge):
         *,
         client: httpx.Client | None = None,
         translate_model: str = "",
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -246,7 +270,7 @@ class HostedJudge(GenerativeJudge):
             if self.base_url and api_key
             else None
         )
-        if complete is not None and "qwen3" in model.casefold():
+        if complete is not None and _says_no_think(model):
             # Qwen3 reasons before it answers unless told not to, and the
             # reasoning can use up the reply. "/no_think" is its own switch.
             inner = complete
@@ -254,7 +278,44 @@ class HostedJudge(GenerativeJudge):
             def complete(prompt: str) -> str:
                 return inner(f"{prompt}\n/no_think")
 
+        self._clock = clock
+        self._spent_until: float | None = None
+        if complete is not None:
+            complete = self._watch_quota(complete)
+        if translator is not None:
+            translator = self._watch_quota(translator)
         super().__init__("hosted", complete, translator=translator)
+
+    def available(self) -> bool:
+        """Configured, and not out of its daily allowance."""
+        if self._spent_until is not None:
+            if self._clock() < self._spent_until:
+                return False
+            self._spent_until = None
+        return super().available()
+
+    def judge(self, claim: str, passage: str) -> Judgment:
+        if not self.available():
+            return Judgment(Stance.NEUTRAL, 0.0, "The model's daily allowance is used up.")
+        return super().judge(claim, passage)
+
+    def _watch_quota(self, inner: Complete) -> Complete:
+        """A spent daily allowance pauses verdicts until the next UTC midnight.
+
+        Without this, every claim would come back "unverified" as if no source
+        answered. Paused, the page says so and still checks citations.
+        """
+
+        def complete(prompt: str) -> str:
+            try:
+                return inner(prompt)
+            except httpx.HTTPStatusError as exc:
+                if _out_of_allowance(exc.response):
+                    now = self._clock()
+                    self._spent_until = now + (86_400 - now % 86_400)
+                raise
+
+        return complete
 
 
 class LlamaCppJudge(GenerativeJudge):
@@ -382,6 +443,9 @@ class AutoJudge:
 
     def translate(self, text: str) -> str | None:
         return translate_with(self._pick(), text)
+
+    def correct(self, claim: str, evidence: list[str]) -> str | None:
+        return correct_with(self._pick(), claim, evidence)
 
     def _pick(self) -> Judge:
         if self._chosen is None:
@@ -514,9 +578,15 @@ def _llamacpp_complete(
 ) -> Complete:
     """OpenAI-style chat completions: llama.cpp locally, or a hosted provider."""
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
+    # A one-sentence verdict needs no reasoning pass. Models that reason by
+    # default (Gemma 4, newer Qwen) take the switch from their chat template;
+    # the first Qwen3 releases take "/no_think" in the prompt instead, and
+    # return nothing when sent both.
     body_extra: dict[str, Any] = (
-        {"max_tokens": 300} if api_key else {"chat_template_kwargs": {"enable_thinking": False}}
+        {} if _says_no_think(model) else {"chat_template_kwargs": {"enable_thinking": False}}
     )
+    if api_key:
+        body_extra["max_tokens"] = 300
 
     def complete(prompt: str) -> str:
         http = client or httpx.Client(timeout=httpx.Timeout(45.0, connect=5.0))
@@ -547,3 +617,19 @@ def _llamacpp_complete(
         return content
 
     return complete
+
+
+def _says_no_think(model: str) -> bool:
+    """The first Qwen3 models (qwen3-30b-a3b and kin), switched off in the prompt."""
+    return "qwen3-" in model.casefold()
+
+
+def _out_of_allowance(response: httpx.Response) -> bool:
+    """Rate limited, or a provider's daily allowance is spent (Workers AI code 4006)."""
+    if response.status_code == 429:
+        return True
+    try:
+        text = response.text.casefold()
+    except (httpx.ResponseNotRead, UnicodeDecodeError):
+        return False
+    return "daily free allocation" in text or '"code":4006' in text.replace(" ", "")

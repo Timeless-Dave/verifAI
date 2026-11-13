@@ -37,7 +37,9 @@ SOURCE_LABELS = {
     "article": "Article",
     "pubmed": "PubMed",
     "europepmc": "Europe PMC",
-    "gdelt": "GDELT",
+    "major_news": "Major news outlets",
+    "us_government": "US government sites",
+    "federal_register": "Federal Register",
 }
 
 SOURCE_ORDER = list(SOURCE_LABELS)
@@ -163,6 +165,8 @@ class ExpertResult(BaseModel):
     citations: list[CitationResult] = Field(default_factory=list)
     evidence_principle: str = EVIDENCE_PRINCIPLE
     subject: str | None = None
+    # What the sources say instead, when they contradict the claim.
+    correction: str | None = None
 
     @computed_field
     def verdict_label(self) -> str:
@@ -203,6 +207,8 @@ class CombinedClaim(BaseModel):
     explanation: str
     evidence: list[EvidenceItem] = Field(default_factory=list)
     experts: list[str] = Field(default_factory=list)
+    # What the sources say instead, when they contradict the claim.
+    correction: str | None = None
 
     @computed_field
     def verdict_label(self) -> str:

@@ -9,7 +9,7 @@ def test_homepage_and_form_and_json(client, http_mock):
     assert home.status_code == 200
     assert "Check it before you share it." in home.text
     assert "Crossref" in home.text
-    assert "OpenAlex" in home.text
+    assert "Reuters" in home.text and "FDA" in home.text
     assert "if one is down" in home.text
     assert client.get("/privacy").status_code == 200
 

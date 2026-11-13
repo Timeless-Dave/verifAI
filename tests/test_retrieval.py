@@ -5,8 +5,9 @@ import httpx
 from verifai.corroboration import Stance
 from verifai.retrieval.current_events import CurrentEventsRetriever
 from verifai.retrieval.europepmc import EuropePMCRetriever
-from verifai.retrieval.gdelt import GdeltRetriever
+from verifai.retrieval.federal_register import FederalRegisterRetriever
 from verifai.retrieval.google_factcheck import GoogleFactCheckRetriever
+from verifai.retrieval.news_search import build_major_news, build_us_government
 from verifai.retrieval.pages import PageRetriever
 from verifai.retrieval.pubmed import PubMedRetriever
 from verifai.retrieval.textutil import (
@@ -411,38 +412,100 @@ def test_europepmc_reviews_and_errors(polite_http, http_mock):
     assert europe.retrieve("a").passages == []
 
 
-def test_gdelt_outlets(polite_http, http_mock):
-    http_mock.get("https://api.gdeltproject.org/api/v2/doc/doc").mock(
+_RSS = """<rss><channel>
+<item><title>Democrats win full control of Congress - NPR</title>
+<link>https://news.google.com/rss/articles/a</link><pubDate>Wed, 04 Nov 2026 08:00:00 GMT</pubDate>
+<source url="https://www.npr.org">NPR</source></item>
+<item><title>Democrats win full control of Congress, again - NPR</title>
+<link>https://news.google.com/rss/articles/b</link><pubDate>Wed, 04 Nov 2026 09:00:00 GMT</pubDate>
+<source url="https://www.npr.org">NPR</source></item>
+<item><title>Opinion | What the Democrats should do now - The New York Times</title>
+<link>https://news.google.com/rss/articles/c</link><pubDate>Thu, 05 Nov 2026 08:00:00 GMT</pubDate>
+<source url="https://www.nytimes.com">The New York Times</source></item>
+<item><title>Democrats sweep Congress in a blue wave - Some Blog</title>
+<link>https://news.google.com/rss/articles/d</link><pubDate>Thu, 05 Nov 2026 08:00:00 GMT</pubDate>
+<source url="https://someblog.example">Some Blog</source></item>
+<item><title>Republicans win control of the House, AP projects - AP News</title>
+<link>https://news.google.com/rss/articles/e</link><pubDate>Wed, 13 Nov 2024 08:00:00 GMT</pubDate>
+<source url="https://apnews.com">AP News</source></item>
+</channel></rss>"""
+
+
+def test_major_news_keeps_newsrooms_once_each(polite_http, http_mock):
+    route = http_mock.get("https://news.google.com/rss/search").mock(
+        side_effect=[
+            httpx.Response(200, text=_RSS),
+            httpx.Response(200, text="<rss><channel></channel></rss>"),
+            httpx.Response(500, text="down"),
+            httpx.Response(200, text="not xml <"),
+        ]
+    )
+    news = build_major_news(polite_http)
+    found = news.retrieve("Democrats win full control of Congress")
+    speakers = [passage.speaker for passage in found.passages]
+    # One vote per newsroom; a blog and an opinion column are left out.
+    assert speakers == ["NPR", "AP News"]
+    assert found.passages[0].family == "outlet:npr.org"
+    assert "Headline from NPR, published 4 November 2026" in found.passages[0].text
+    # The two-year-old headline says how old it is.
+    assert "years ago: it shows what was true then" in found.passages[1].text
+    # The last month first: the first request asks for it.
+    assert route.calls[0].request.url.params["q"].endswith("when:30d")
+    assert news.retrieve("Democrats win full control of Congress").unavailable
+    assert news.retrieve("a").passages == []
+
+
+def test_government_sites_count_each_agency(polite_http, http_mock):
+    rss = """<rss><channel>
+<item><title>FDA Approves First Drug - U.S. Food and Drug Administration (.gov)</title>
+<link>https://news.google.com/rss/articles/x</link><pubDate>Mon, 09 Nov 2026 08:00:00 GMT</pubDate>
+<source url="https://www.fda.gov">U.S. Food and Drug Administration (.gov)</source></item>
+<item><title>Statement on the new drug approval - Some Agency</title>
+<link>https://news.google.com/rss/articles/y</link><pubDate>Mon, 09 Nov 2026 08:00:00 GMT</pubDate>
+<source url="https://www.newagency.gov">Some Agency</source></item>
+</channel></rss>"""
+    route = http_mock.get("https://news.google.com/rss/search").mock(
+        return_value=httpx.Response(200, text=rss)
+    )
+    found = build_us_government(polite_http).retrieve("The FDA approved the first drug")
+    assert [passage.family for passage in found.passages] == ["gov:fda.gov", "gov:newagency.gov"]
+    assert found.passages[0].speaker == "U.S. Food and Drug Administration"
+    assert "site:whitehouse.gov" in str(route.calls[0].request.url).replace("%3A", ":")
+
+
+def test_federal_register_documents(polite_http, http_mock):
+    http_mock.get("https://www.federalregister.gov/api/v1/documents.json").mock(
         side_effect=[
             httpx.Response(
                 200,
                 json={
-                    "articles": [
+                    "results": [
                         {
-                            "title": "Council funds the bridge",
-                            "url": "https://news.example/story",
-                            "domain": "news.example",
-                            "seendate": "20261029",
-                            "sourcecountry": "UK",
+                            "title": "Menthol in Cigarettes",
+                            "abstract": "FDA proposes a product standard.",
+                            "html_url": "https://www.federalregister.gov/d/1",
+                            "agencies": [{"name": "Food and Drug Administration"}],
+                            "publication_date": "2022-05-04",
+                            "type": "Proposed Rule",
                         },
-                        {"title": "", "url": "https://news.example/empty"},
+                        {"title": "", "html_url": "x"},
                         "skip",
                     ]
                 },
             ),
-            httpx.Response(200, json={}),
-            httpx.Response(200, json={"articles": {"bad": True}}),
+            httpx.Response(200, json={"results": "bad"}),
             httpx.Response(500, text="down"),
         ]
     )
-    gdelt = GdeltRetriever(polite_http)
-    found = gdelt.retrieve("The council funded the bridge repair")
-    assert found.passages[0].family == "outlet:news.example"
-    assert found.passages[0].speaker == "news.example"
-    assert gdelt.retrieve("The council funded the bridge repair").passages == []
-    assert gdelt.retrieve("The council funded the bridge repair").unavailable
-    assert gdelt.retrieve("The council funded the bridge repair").unavailable
-    assert gdelt.retrieve("a").passages == []
+    register = FederalRegisterRetriever(polite_http)
+    found = register.retrieve("FDA bans menthol cigarettes")
+    assert len(found.passages) == 1
+    passage = found.passages[0]
+    assert passage.family == "federal_register" and passage.year == 2022
+    assert "Proposed Rule by Food and Drug Administration" in passage.text
+    assert register.retrieve("FDA bans menthol cigarettes").passages == []
+    assert register.retrieve("FDA bans menthol cigarettes").unavailable
+    assert register.retrieve("a").passages == []
 
 
 def test_current_events_filters_stories(polite_http, http_mock):

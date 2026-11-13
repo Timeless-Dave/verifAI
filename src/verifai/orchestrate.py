@@ -149,6 +149,7 @@ def combine_claim(claim: str, results: list[ExpertResult]) -> CombinedClaim:
             explanation=result.explanation,
             evidence=evidence,
             experts=[result.expert],
+            correction=result.correction,
         )
     decision = corroborate(_votes(evidence))
     explanation = decision.explanation
@@ -164,7 +165,15 @@ def combine_claim(claim: str, results: list[ExpertResult]) -> CombinedClaim:
         explanation=explanation,
         evidence=evidence,
         experts=[result.expert for result in results],
+        correction=_correction(results, decision.verdict),
     )
+
+
+def _correction(results: list[ExpertResult], verdict: Verdict) -> str | None:
+    """The correction from an expert that reached the same verdict, else any."""
+    agreeing = [result.correction for result in results if result.verdict is verdict]
+    others = [result.correction for result in results]
+    return next((text for text in [*agreeing, *others] if text), None)
 
 
 def rollup(

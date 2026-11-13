@@ -9,11 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 from rapidfuzz import fuzz
 
 from verifai.corroboration import SourceVote, Stance, corroborate
-from verifai.models.judge import Judge, translate_with
+from verifai.dates import pin_dates
+from verifai.models.judge import Judge, correct_with, translate_with
 from verifai.models.parsing import Judgment
 from verifai.retrieval.textutil import detect_language, needs_english, search_terms_for
 from verifai.retrieval.types import Passage, RetrievalResult, Retriever
-from verifai.schemas import EvidenceItem, ExpertResult, ordered_sources, source_label
+from verifai.schemas import EvidenceItem, ExpertResult, Verdict, ordered_sources, source_label
 
 NOT_MEDICAL_ADVICE = (
     "This is not medical advice. It does not diagnose, treat, or recommend care. "
@@ -37,10 +38,18 @@ def check_claim(
     # still search the claim's own Wikipedia edition in its own words.
     asked = claim
     english = translate_with(judge, claim) if needs_english(claim) else None
-    if english and english.casefold() != claim.casefold():
+    translated = bool(english and english.casefold() != claim.casefold())
+    if translated and english:
         original = claim
         claim = english
-        outcomes = _retrieve_all(retrievers, claim, workers)
+    # "Resigned today" is judged as "resigned on 13 November 2026", so a
+    # dated report can confirm it or show it happened on another day. The
+    # sources are searched without the relative words.
+    pinned = pin_dates(claim)
+    query = pinned.search if pinned.readings else claim
+    claim = pinned.dated
+    outcomes = _retrieve_all(retrievers, query, workers)
+    if translated:
         if detect_language(original) != "en":
             native = [
                 retriever.retrieve(original)
@@ -53,8 +62,9 @@ def check_claim(
             for part in (f"Sources were searched with the English translation “{claim}”.", note)
             if part
         )
-    else:
-        outcomes = _retrieve_all(retrievers, claim, workers)
+    if pinned.readings:
+        read_as = "; ".join(f"“{word}” as {when}" for word, when in pinned.readings)
+        note = " ".join(part for part in (f"Dates were read from today: {read_as}.", note) if part)
     # Two translations that disagree mean the claim's meaning is in doubt. A
     # judge reading the original would be guessing at it too, so no source
     # gets a vote: the sources are listed, and the claim stays unverified.
@@ -80,6 +90,20 @@ def check_claim(
     unavailable: list[str] = []
     saw_review = False
     unjudged = False
+    refuting: list[tuple[float, Passage]] = []
+    supporting: list[Passage] = []
+    judgments = _judge_all(
+        judge,
+        claim,
+        [
+            passage
+            for outcome in outcomes
+            if not outcome.unavailable
+            for passage in outcome.passages
+        ],
+        workers=workers,
+        unreadable=unreadable,
+    )
     for outcome in outcomes:
         consulted.append(outcome.source)
         if outcome.unavailable:
@@ -87,13 +111,7 @@ def check_claim(
             continue
         contributed.append(outcome.source)
         for passage in outcome.passages:
-            judgment = (
-                Judgment(
-                    Stance.NEUTRAL, 0.0, "Not counted: the claim could not be translated reliably."
-                )
-                if unreadable
-                else screen(claim, passage, _judge(judge, claim, passage))
-            )
+            judgment = judgments[id(passage)]
             if passage.publication_type and "review" in passage.publication_type:
                 saw_review = True
             if passage.native_stance is None and passage.text and not judge.available():
@@ -101,6 +119,10 @@ def check_claim(
             evidence.append(
                 _item(passage, judgment.stance, judgment.confidence, judgment.explanation)
             )
+            if judgment.stance is Stance.REFUTES:
+                refuting.append((judgment.confidence, passage))
+            elif judgment.stance is Stance.SUPPORTS:
+                supporting.append(passage)
             if judgment.stance is not Stance.NEUTRAL:
                 if passage.about and passage.about.casefold() in claim.casefold():
                     evidence_about.add(passage.url or passage.title)
@@ -114,9 +136,22 @@ def check_claim(
                         url=passage.url,
                         title=passage.title,
                         detail=judgment.explanation,
+                        speaker=passage.speaker,
                     )
                 )
     decision = corroborate(_main_article_rules(votes, claim, evidence_about))
+    correction = _correction(
+        judge, claim, decision.verdict, refuting, supporting, unreadable=unreadable
+    )
+    if pinned.readings and correction and date_only(claim, correction):
+        note = " ".join(
+            part
+            for part in (
+                "Right event, wrong date: the sources report it, but on another day.",
+                note,
+            )
+            if part
+        )
     pieces = [decision.explanation]
     if unjudged:
         pieces.append(
@@ -143,7 +178,121 @@ def check_claim(
         sources_contributed=ordered_sources(contributed),
         sources_unavailable=ordered_sources(unavailable),
         subject=asked,
+        correction=correction,
     )
+
+
+def _judge_all(
+    judge: Judge, claim: str, passages: list[Passage], *, workers: int, unreadable: bool
+) -> dict[int, Judgment]:
+    """Judge every passage. A hosted model takes several requests at once."""
+    if unreadable:
+        skipped = Judgment(
+            Stance.NEUTRAL, 0.0, "Not counted: the claim could not be translated reliably."
+        )
+        return {id(passage): skipped for passage in passages}
+
+    def one(passage: Passage) -> Judgment:
+        # A passage that is not about the claim could not vote anyway, so it
+        # is not sent to the model: that saves a call per stray search hit.
+        if passage.native_stance is None and not on_topic(claim, passage):
+            return Judgment(
+                Stance.NEUTRAL,
+                0.0,
+                "Not counted: this source is not about the claim's main subject.",
+            )
+        return screen(claim, passage, _judge(judge, claim, passage))
+
+    if len(passages) > 1 and workers > 1 and getattr(judge, "concurrent", False):
+        with ThreadPoolExecutor(max_workers=min(workers, len(passages))) as pool:
+            results = list(pool.map(one, passages))
+    else:
+        results = [one(passage) for passage in passages]
+    return {id(passage): result for passage, result in zip(passages, results, strict=True)}
+
+
+def _correction(
+    judge: Judge,
+    claim: str,
+    verdict: Verdict,
+    refuting: list[tuple[float, Passage]],
+    supporting: list[Passage],
+    *,
+    unreadable: bool,
+) -> str | None:
+    """What the sources say instead, for a claim they contradict.
+
+    Only from the contradicting passages, and only when the claim is refuted,
+    mixed, or every source that took a side contradicts it. A claim the
+    sources back may still misspell a name they spell the same way each time.
+    """
+    if unreadable:
+        return None
+    leans_false = bool(refuting) and not supporting
+    if verdict in {Verdict.UNSUPPORTED, Verdict.MIXED} or (
+        verdict is Verdict.UNVERIFIABLE and leans_false
+    ):
+        strongest = [passage for _score, passage in sorted(refuting, key=lambda pair: -pair[0])]
+        texts = [passage.text for passage in strongest[:3]]
+        fixed = correct_with(judge, claim, texts)
+        if fixed and grounded(fixed, claim, texts):
+            return fixed
+    return spelling_note(claim, supporting or [passage for _score, passage in refuting])
+
+
+_NAME_WORD = re.compile(r"\b[A-Z][a-zà-ÿ'’-]{3,}\b")
+_FACT_TOKEN = re.compile(r"\b(?:\d[\d,.]*|[A-Z][\w'’-]+)\b")
+_SENTENCE_START = re.compile(r"(?:^|[.!?]\s+)([A-Z][\w'’-]+)")
+
+
+def grounded(correction: str, claim: str, evidence: list[str]) -> bool:
+    """Every number and name in a correction comes from the claim or the sources.
+
+    A model asked what is true instead may fill a gap from memory. A
+    correction that names a date or a person no source gave is dropped.
+    """
+    known = f"{claim} {' '.join(evidence)}".casefold()
+    first = _SENTENCE_START.findall(correction)
+    for token in _FACT_TOKEN.findall(correction):
+        if token in first and token.casefold() in _COMMON_STARTS:
+            continue
+        if token.casefold().rstrip(".,") not in known:
+            return False
+    return True
+
+
+_COMMON_STARTS = frozenset({"the", "a", "an", "it", "this", "they", "he", "she", "in", "on"})
+
+
+def date_only(claim: str, correction: str) -> bool:
+    """The correction keeps the claim and changes only when it happened."""
+
+    def strip(text: str) -> str:
+        text = re.sub(r"\b(?:on|in)\s+(?:the week of\s+)?\d{1,2}\s+[A-Z][a-z]+\s+\d{4}", " ", text)
+        text = re.sub(r"\b(?:on|in)\s+[A-Z][a-z]+\s+\d{1,2},?\s+\d{4}", " ", text)
+        text = re.sub(r"\b(?:on|in)\s+(?:[A-Z][a-z]+\s+)?\d{4}", " ", text)
+        return " ".join(text.split())
+
+    left, right = strip(claim), strip(correction)
+    changed = left != " ".join(claim.split()) and claim.strip(" .") != correction.strip(" .")
+    return changed and fuzz.ratio(left.casefold(), right.casefold()) >= 90
+
+
+def spelling_note(claim: str, passages: list[Passage]) -> str | None:
+    """A name in the claim that its own sources spell differently: Barak, Barack."""
+    claim_words = set(_NAME_WORD.findall(claim))
+    if not claim_words:
+        return None
+    for passage in passages:
+        # The title is how the source spells it; ``about`` is the claim's own spelling.
+        for word in _NAME_WORD.findall(passage.title):
+            if word in claim_words:
+                continue
+            for written in claim_words:
+                if written.casefold() != word.casefold() and fuzz.ratio(written, word) >= 80:
+                    fixed = re.sub(rf"\b{re.escape(written)}\b", word, claim)
+                    return f"Check the spelling: the sources write “{word}”, so it reads “{fixed}”"
+    return None
 
 
 def _judge(judge: Judge, claim: str, passage: Passage) -> Judgment:
@@ -247,6 +396,7 @@ _GENERIC = frozenset(
     ]
 )
 _LITERATURE = frozenset({"pubmed", "europepmc"})
+_HEADLINES = ("outlet:", "gov:")
 _NOT_ABOUT = re.compile(
     r"\b(?:does not|doesn't|do not|did not|never|no)\s+(?:\w+\s+){0,2}"
     r"(?:mention|address|discuss|refer to|relate to|concern|cover|examine|study|test)|"
@@ -286,7 +436,10 @@ def on_topic(claim: str, passage: Passage) -> bool:
         return bool(re.search(rf"\b{re.escape(stem)}", haystack))
 
     stems = {term[:5] if len(term) > 5 else term for term in terms}
-    if sum(1 for term in set(terms) if present(term)) < min(2, len(stems)):
+    # A headline is short and says it its own way ("House and Senate" for
+    # "Congress"), so one shared key term is enough; the judge still reads it.
+    needed = 1 if passage.family.startswith(_HEADLINES) else 2
+    if sum(1 for term in set(terms) if present(term)) < min(needed, len(stems)):
         return False
     # "Smoking cigarettes increases lung cancer risk" is about smoking. A
     # salt-and-cancer paper shares "cancer" and "risk" but not the subject.

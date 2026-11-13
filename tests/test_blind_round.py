@@ -118,7 +118,13 @@ def test_health_reads_fact_checks_only_when_a_key_is_set(polite_http):
     from verifai.models.judge import NullJudge
 
     without = build_health_expert(polite_http, make_settings(), NullJudge())
-    assert without.registry.names() == ["pubmed", "europepmc", "wikipedia"]
+    assert without.registry.names() == ["pubmed", "europepmc", "wikipedia", "us_government"]
     keyed = make_settings(google_factcheck_api_key="k")
     with_key = build_health_expert(polite_http, keyed, NullJudge())
-    assert with_key.registry.names() == ["pubmed", "europepmc", "wikipedia", "google_factcheck"]
+    assert with_key.registry.names() == [
+        "pubmed",
+        "europepmc",
+        "wikipedia",
+        "us_government",
+        "google_factcheck",
+    ]

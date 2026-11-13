@@ -166,6 +166,11 @@ button, .masthead-strap, .masthead-nav, .promises, .site-foot, .evidence .source
 .translated { display: flex; gap: 8px; align-items: flex-start; margin: -2px 0 8px; font-size: 15px; color: var(--ink-2); }
 .translated .icon { width: 16px; height: 16px; margin-top: 3px; flex: none; }
 
+/* What the sources say instead: a margin note, in ink, beside the verdict */
+.correction { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 12px; padding: 10px 12px; border-left: 3px solid var(--true); background: var(--sheet); font-size: 16px; line-height: 1.45; color: var(--ink); }
+.correction .icon { width: 17px; height: 17px; margin-top: 3px; flex: none; color: var(--true-ink); }
+.correction-label { display: block; margin-bottom: 2px; font: 700 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--true-ink); }
+
 /* How it works, as four steps */
 .how { margin: 40px 0 0; padding-top: 14px; border-top: 3px solid var(--rule); }
 .how-title { margin: 0 0 4px; font: 700 12px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }

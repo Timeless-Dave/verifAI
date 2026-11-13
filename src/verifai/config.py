@@ -68,9 +68,12 @@ class Settings(BaseSettings):
     # public site can judge claims with no machine of its own. Cloudflare
     # Workers AI: https://api.cloudflare.com/client/v4/accounts/<id>/ai/v1
     hosted_base_url: str = ""
-    # Qwen3 30B (3B active): 7 of 7 on the judge's trap cases, about 0.7 s
-    # each, and the cheapest per judgment on Workers AI.
-    hosted_model: str = "@cf/qwen/qwen3-30b-a3b-fp8"
+    # Gemma 4 26B (4B active), released April 2026. Older judges (Qwen3 30B,
+    # Llama 3.3 and 4, gpt-oss) trusted their own stale memory over the
+    # evidence: each refuted "Trump is the president" against his Wikipedia
+    # article. Gemma 4 made no wrong calls on 60 blind and current-affairs
+    # claims, at about 7 Workers AI neurons a judgment with reasoning off.
+    hosted_model: str = "@cf/google/gemma-4-26b-a4b-it"
     hosted_api_key: str = ""
     # Non-English claims are translated before their sources are searched.
     # Llama 3.3 70B rendered Yoruba, Igbo, and Hausa test claims, negations

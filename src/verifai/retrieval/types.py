@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Protocol
 
 from verifai.corroboration import Stance
@@ -29,6 +30,8 @@ class Passage:
     # The name in the claim this passage was looked up by: the item or
     # article for "Frogs" is about frogs even when it is titled "Anura".
     about: str | None = None
+    # When a news report or official statement was published.
+    published: date | None = None
 
 
 @dataclass

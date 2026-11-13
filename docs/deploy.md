@@ -114,7 +114,7 @@ sudo systemctl reload caddy
 
 The public demo, https://useverifai.vercel.app, runs this way. `api/index.py` is the entry point and `vercel.json` sends every path to it. Vercel installs the project from `pyproject.toml` and `uv.lock`, without the model extras.
 
-A serverless function cannot run a model itself: there is no GPU, and the weights are far larger than a function. The demo uses `VERIFAI_MODEL_BACKEND=hosted`: an open-weights model on Cloudflare Workers AI, reached through its OpenAI-compatible API. Set `VERIFAI_HOSTED_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<account id>/ai/v1`, `VERIFAI_HOSTED_API_KEY` to a Workers AI token, and optionally `VERIFAI_HOSTED_MODEL` (default `@cf/qwen/qwen3-30b-a3b-fp8`). Any OpenAI-compatible provider works the same way.
+A serverless function cannot run a model itself: there is no GPU, and the weights are far larger than a function. The demo uses `VERIFAI_MODEL_BACKEND=hosted`: an open-weights model on Cloudflare Workers AI, reached through its OpenAI-compatible API. Set `VERIFAI_HOSTED_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<account id>/ai/v1`, `VERIFAI_HOSTED_API_KEY` to a Workers AI token, and optionally `VERIFAI_HOSTED_MODEL` (default `@cf/google/gemma-4-26b-a4b-it`). Any OpenAI-compatible provider works the same way.
 
 Environment variables for the project (`vercel env add NAME production`):
 

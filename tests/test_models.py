@@ -80,7 +80,7 @@ def test_parse_judgment_reads_json_and_rejects_junk() -> None:
 def test_prompt_includes_the_claim_and_clips_it() -> None:
     prompt = judgment_prompt("claim " * 200, "evidence " * 2000)
     assert "claim claim" in prompt
-    assert len(prompt) < 5500  # 600 + 3500 clipped characters plus the instructions
+    assert len(prompt) < 6000  # 600 + 3500 clipped characters plus the instructions
 
 
 def test_nli_labels() -> None:
