@@ -24,6 +24,7 @@ import base64
 import binascii
 import io
 import json
+import logging
 import re
 import zlib
 from dataclasses import dataclass, replace
@@ -34,10 +35,12 @@ from pypdf.errors import PdfReadError
 from rapidfuzz import fuzz
 
 from verifai.config import Settings
-from verifai.http import PoliteHttp
+from verifai.http import HttpResult, PoliteHttp
 from verifai.net import public_url_problem
 from verifai.retrieval.textutil import html_to_text
 from verifai.schemas import CitationResult
+
+log = logging.getLogger(__name__)
 
 _FULL_TEXT_LIMIT = 400_000
 _PDF_PAGES = 40
@@ -338,38 +341,49 @@ class SourceReader:
             query = 'title:"{}"'.format(re.sub(r'["\\]', " ", title)[:200])
         else:
             return None
-        headers = (
-            {"Authorization": f"Bearer {self.settings.core_api_key}"}
-            if self.settings.core_api_key
-            else None
-        )
-        # The trailing slash matters: without it CORE answers with a redirect page.
-        result = self.http.get(
-            "https://api.core.ac.uk/v3/search/works/",
-            params={"q": query, "limit": 3},
-            headers=headers,
-        )
+        key = self.settings.core_api_key
+        result = self._core_search(query, key)
+        if key and result.status_code in {401, 403}:
+            # An expired or revoked key: CORE still answers without one, for abstracts.
+            log.warning(
+                "CORE refused the API key (HTTP %s); asking without it.", result.status_code
+            )
+            result = self._core_search(query, None)
         body = result.json_body() if result.ok else None
         works = body.get("results") if isinstance(body, dict) else None
         if not isinstance(works, list):
             return None
-        for work in works:
-            if not isinstance(work, dict) or not _same_work(work, doi, title):
-                continue
-            name = str(work.get("title") or title or "") or None
-            abstract = " ".join(str(work.get("abstract") or "").split())
-            full = str(work.get("fullText") or "")
-            core_id = work.get("id")
-            url = (
-                f"https://doi.org/{doi}"
-                if doi
-                else (f"https://core.ac.uk/works/{core_id}" if core_id else None)
-            )
-            if len(full) > 1500:
-                return SourceText(name, url, "full text", abstract, full[:_FULL_TEXT_LIMIT], "CORE")
-            if abstract:
-                return SourceText(name, url, "abstract", abstract, "", "CORE")
+        matches = [w for w in works if isinstance(w, dict) and _same_work(w, doi, title)]
+        if not matches:
+            return None
+        # CORE often holds several copies of one paper; only some carry the full text.
+        full = next(
+            (str(w["fullText"]) for w in matches if len(str(w.get("fullText") or "")) > 1500), ""
+        )
+        abstract = next(
+            (" ".join(str(w.get("abstract")).split()) for w in matches if w.get("abstract")), ""
+        )
+        first = next((w for w in matches if len(str(w.get("fullText") or "")) > 1500), matches[0])
+        name = str(first.get("title") or title or "") or None
+        core_id = first.get("id")
+        url = (
+            f"https://doi.org/{doi}"
+            if doi
+            else (f"https://core.ac.uk/works/{core_id}" if core_id else None)
+        )
+        if full:
+            return SourceText(name, url, "full text", abstract, full[:_FULL_TEXT_LIMIT], "CORE")
+        if abstract:
+            return SourceText(name, url, "abstract", abstract, "", "CORE")
         return None
+
+    def _core_search(self, query: str, key: str | None) -> HttpResult:
+        # The trailing slash matters: without it CORE answers with a redirect page.
+        return self.http.get(
+            "https://api.core.ac.uk/v3/search/works/",
+            params={"q": query, "limit": 5},
+            headers={"Authorization": f"Bearer {key}"} if key else None,
+        )
 
     def _semantic_scholar_abstract(self, doi: str) -> str:
         if not self.settings.semantic_scholar_api_key:

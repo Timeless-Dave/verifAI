@@ -370,3 +370,30 @@ def test_a_read_marker_is_no_dangling_pointer_and_headlines_read_well() -> None:
     assert mine.startswith("Only your attached PDF contradicts this.")
     named = claim_headline(Verdict.UNVERIFIABLE, ["Wikipedia"], [], [])
     assert named.startswith("Only Wikipedia backs")
+
+
+@respx.mock
+def test_core_prefers_the_copy_with_full_text_and_survives_an_expired_key() -> None:
+    settings = make_settings(core_api_key="trial-key")
+    reader = SourceReader(PoliteHttp(settings), settings)
+    respx.get("https://api.openalex.org/works").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    copies = [
+        {"id": 1, "title": "A study of sleep and memory", "abstract": "Short form."},
+        {"id": 2, "title": "A Study of Sleep and Memory", "fullText": "Results. " * 400},
+    ]
+    route = respx.get(CORE).mock(return_value=httpx.Response(200, json={"results": copies}))
+    found = reader.read(_citation("Walker (2017)", matched_title="A study of sleep and memory"))
+    assert found is not None and found.read == "full text"
+    assert found.abstract == "Short form." and found.url == "https://core.ac.uk/works/2"
+
+    def by_key(request: httpx.Request) -> httpx.Response:
+        if "authorization" in request.headers:
+            return httpx.Response(401, json={"message": "Invalid key"})
+        return httpx.Response(200, json={"results": copies[:1]})
+
+    route.mock(side_effect=by_key)
+    expired = reader.read(_citation("Walker 2017", matched_title="A study of sleep and memory"))
+    assert expired is not None and expired.read == "abstract"
+    assert "authorization" not in route.calls.last.request.headers

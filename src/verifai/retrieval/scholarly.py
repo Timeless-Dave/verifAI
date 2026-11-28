@@ -294,8 +294,9 @@ def _s2_passage(paper: object) -> Passage | None:
     )
 
 
-# Figshare and Zenodo deposits, and the DOIs PLOS gives each figure and table.
-_NOT_A_PAPER = re.compile(r"^10\.(?:6084|5281)/|\.[gt]\d{3}$")
+# Figshare, Zenodo, and OSF deposits (data and pre-registrations, not
+# findings), and the DOIs PLOS gives each figure and table.
+_NOT_A_PAPER = re.compile(r"^10\.(?:6084|5281|17605)/|\.[gt]\d{3}$")
 
 
 class CoreSearchRetriever:
