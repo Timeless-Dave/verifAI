@@ -363,9 +363,11 @@ def claim_headline(
     verdict: Verdict, support: list[str], refute: list[str], evidence: list[EvidenceItem]
 ) -> str:
     if verdict is Verdict.SUPPORTED:
-        return f"{_count(len(support), 'independent source')} back this up."
+        verb = "backs" if len(support) == 1 else "back"
+        return f"{_count(len(support), 'independent source')} {verb} this up."
     if verdict is Verdict.UNSUPPORTED:
-        return f"{_count(len(refute), 'independent source')} contradict this."
+        verb = "contradicts" if len(refute) == 1 else "contradict"
+        return f"{_count(len(refute), 'independent source')} {verb} this."
     if verdict is Verdict.MIXED:
         return "Independent sources disagree about this."
     if support and refute:

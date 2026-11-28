@@ -397,3 +397,12 @@ def test_core_prefers_the_copy_with_full_text_and_survives_an_expired_key() -> N
     expired = reader.read(_citation("Walker 2017", matched_title="A study of sleep and memory"))
     assert expired is not None and expired.read == "abstract"
     assert "authorization" not in route.calls.last.request.headers
+
+
+def test_a_single_deciding_source_agrees_with_its_verb() -> None:
+    from verifai.schemas import Verdict
+    from verifai.web.view import claim_headline
+
+    assert claim_headline(Verdict.SUPPORTED, ["A"], [], []) == "1 independent source backs this up."
+    assert claim_headline(Verdict.SUPPORTED, ["A", "B"], [], []).endswith("sources back this up.")
+    assert claim_headline(Verdict.UNSUPPORTED, [], ["A"], []).endswith("source contradicts this.")
