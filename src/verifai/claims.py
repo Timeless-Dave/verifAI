@@ -76,11 +76,23 @@ _BIBLIOGRAPHIC = re.compile(
     re.IGNORECASE,
 )
 _AUTHOR_INITIALS = re.compile(r"\b[A-Z][a-z'’\-]+,\s+(?:[A-Z]\.\s*){1,3}")
+_VANCOUVER_ENTRY = re.compile(
+    r"^\s*(?:\[\d{1,3}\]|\d{1,3}[.)])\s+[A-Z][\w'’-]+,?\s+[A-Z]{1,3}\b[,.]"
+)
 _VANCOUVER_AUTHOR = re.compile(r"\b[A-Z][a-z'’\-]+\s+[A-Z]{1,3},")
 _FINITE_VERB = re.compile(
     r"\b(?:is|are|was|were|be|been|has|have|had|does|did|do|can|could|will|would|may|"
     r"might|must|shall|should|said|says|causes?|shows?|found|won|lies|holds|contains?)\b|"
-    r"\b[a-z]{3,}ed\b",
+    r"\b[a-z]{3,}ed\b|"
+    # The present tense of academic prose: "exercise improves", "the model relies".
+    r"(?<![-\w])(?:improves?|increases?|reduces?|decreases?|relies|rely|depends?|suggests?|"
+    r"indicates?|demonstrates?|reports?|finds|predicts?|affects?|leads?|results?|"
+    r"outperforms?|achieves?|requires?|uses?|includes?|provides?|enhances?|lowers?|"
+    r"raises?|exceeds?|remains?|consists?|dispenses?|supports?|confirms?|reveals?|argues?|"
+    r"proposes?|introduces?|describes?|explains?|determines?|influences?|prevents?|"
+    r"produces?|generates?|enables?|allows?|accounts?|correlates?|occurs?|appears?|"
+    r"plays?|makes?|takes?|gives?|becomes?|emerges?|varies|vary|differs?|lacks?|"
+    r"protects?|promotes?|inhibits?|boosts?|harms?|worsens?|matters?|works?|helps?)\b",
     re.IGNORECASE,
 )
 # Text that talks to the checker, not about the world.
@@ -132,6 +144,8 @@ _NOT_ASSERTED = re.compile(
     re.IGNORECASE,
 )
 _YEAR_ONLY = re.compile(r"^\s*(?:19|20)\d{2}[a-z]?\s*$")
+# "(Smith, 2020)", "(Lee & Park, 2019; Chen, 2021)", "(Smith 2020, p. 4)".
+_AUTHOR_YEAR = re.compile(r"[A-Z][\w'’-]+,?\s+(?:19|20)\d{2}[a-z]?\b")
 
 
 def extract_claims(text: str, *, limit: int = 5) -> list[str]:
@@ -159,7 +173,14 @@ def screen_paste(text: str) -> tuple[list[str], list[str]]:
     removed and reported, never silently. Only the offending piece goes: a
     real claim on the same line as an injection is still checked.
     """
+    claims, ignored, _written = screen_with_citations(text)
+    return claims, ignored
+
+
+def screen_with_citations(text: str) -> tuple[list[str], list[str], dict[str, str]]:
+    """Like :func:`screen_paste`, plus each claim's sentence as written, citations and all."""
     claims: list[str] = []
+    written: dict[str, str] = {}
     seen: set[str] = set()
     body = _without_bibtex(without_references(text or ""))
     ignored = [" ".join(markup.split())[:160] for markup in _MARKUP.findall(body)]
@@ -169,18 +190,47 @@ def screen_paste(text: str) -> tuple[list[str], list[str]]:
             ignored.append(chunk.strip()[:160])
             continue
         citation_line = bool(_CITATION_MARK.search(chunk) or find_references(chunk))
-        for sentence in split_sentences(_without_citation_parens(chunk)):
-            cleaned = " ".join(_EMOJI.sub(" ", sentence).split())
-            cleaned = cleaned.replace(" ,", ",").replace(" .", ".")
+        removed: list[str] = []
+        for marked in split_sentences(_without_citation_parens(chunk, removed)):
+            original = _restore(marked, removed)
+            sentence = _NUMBERED_MARK.sub("", _PLACEHOLDER.sub("", marked))
+            cleaned = _tidy(sentence)
             if _INSTRUCTION.search(cleaned) or _FAKE_LABEL.search(cleaned):
                 ignored.append(cleaned[:160])
                 continue
+            if not _keep(cleaned, citation_line=citation_line):
+                continue
+            # A link or identifier says where the claim came from, not what it says.
+            stripped = _tidy(_IDENTIFIER.sub("", sentence))
+            if stripped != cleaned and len(stripped) >= 14:
+                cleaned = stripped
             folded = cleaned.casefold()
-            if folded in seen or not _keep(cleaned, citation_line=citation_line):
+            if folded in seen:
                 continue
             seen.add(folded)
             claims.append(cleaned)
-    return claims, list(dict.fromkeys(item for item in ignored if item.strip()))
+            written[cleaned] = " ".join(original.split())
+    return claims, list(dict.fromkeys(item for item in ignored if item.strip())), written
+
+
+def _tidy(sentence: str) -> str:
+    cleaned = " ".join(_EMOJI.sub(" ", sentence).split())
+    return cleaned.replace(" ,", ",").replace(" .", ".").replace(" ;", ";")
+
+
+_PLACEHOLDER = re.compile(r"\x02(\d+)\x03")
+_IDENTIFIER = re.compile(
+    r"\s*(?:https?://\S+|\b(?:doi:\s*)?10\.\d{4,9}/\S+|\barXiv:\s*\d{4}\.\d{4,5}(?:v\d+)?|"
+    r"\bPMID:?\s*\d+)",
+    re.IGNORECASE,
+)
+
+
+def _restore(marked: str, removed: list[str]) -> str:
+    return _PLACEHOLDER.sub(lambda found: removed[int(found.group(1))], marked)
+
+
+_NUMBERED_MARK = re.compile(r"\s*\[\s*\d{1,3}(?:\s*[,–-]\s*\d{1,3})*\s*\]")
 
 
 def split_sentences(text: str) -> list[str]:
@@ -204,8 +254,12 @@ def _continues(previous: str, piece: str) -> bool:
     return last in _ABBREVIATIONS
 
 
-def _without_citation_parens(line: str) -> str:
-    """Drop "(…)" groups that only hold a citation or a year, innermost first."""
+def _without_citation_parens(line: str, removed: list[str] | None = None) -> str:
+    """Drop "(…)" groups that only hold a citation or a year, innermost first.
+
+    With ``removed``, each dropped group is kept there and marked in the text,
+    so the caller can tell which sentence cited what.
+    """
     kept: list[str] = []
 
     def replace(match: re.Match[str]) -> str:
@@ -214,8 +268,12 @@ def _without_citation_parens(line: str) -> str:
             _YEAR_ONLY.match(inner)
             or _CITATION_MARK.search(inner)
             or _AUTHOR_INITIALS.search(inner)
+            or _AUTHOR_YEAR.search(inner)
         ):
-            return ""
+            if removed is None:
+                return ""
+            removed.append(match.group(0))
+            return f"\x02{len(removed) - 1}\x03"
         kept.append(match.group(0))
         return f"\x00{len(kept) - 1}\x01"
 
@@ -267,7 +325,17 @@ def _keep(sentence: str, *, citation_line: bool = False) -> bool:
     if _title_case(sentence):
         return False
     # On a line full of citations, a phrase with no verb is a title or a venue.
-    return not (citation_line and not _FINITE_VERB.search(sentence))
+    # Long sentence-case prose is a claim even when its verb is not listed.
+    if citation_line and not _FINITE_VERB.search(sentence):
+        words = _WORD.findall(sentence)
+        lower = sum(1 for word in words if word[0].islower())
+        pointer = re.search(
+            r"^\s*(?:see|read|refer|visit|note|check|cf\.?|compare)\b|\bsee also\b",
+            sentence,
+            re.IGNORECASE,
+        )
+        return not pointer and len(words) >= 12 and lower / max(len(words), 1) >= 0.6
+    return True
 
 
 def _title_case(sentence: str) -> bool:
@@ -313,6 +381,10 @@ def without_references(text: str) -> str:
     """
     lines = (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
     drop = [False] * len(lines)
+    for position, row in enumerate(lines):
+        # "1. Doll R, Hill AB. Smoking and carcinoma of the lung. …"
+        if _VANCOUVER_ENTRY.match(row):
+            drop[position] = True
     index = 0
     while index < len(lines):
         covered = _reference_at(lines, index, find_references)

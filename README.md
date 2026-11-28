@@ -8,6 +8,8 @@ VerifAI does the fact-checking legwork for you. Checking something properly mean
 - Every verdict links to its sources, so you can read them yourself.
 - When the evidence is thin, VerifAI says so. "Unverified" means "not enough independent evidence", never "false".
 
+**For research and academic writing:** when a sentence cites a source ("… (Northey et al., 2018)", "… [3]", a DOI or a link), VerifAI opens that source, reads its full text where it is open or its abstract, and tells you whether it says what the sentence claims, quoting the passage. A real paper cited for something it never says is the commonest fault in AI-written text, and a check that only confirms the paper exists misses it.
+
 VerifAI is a tool for reading, not an oracle. It does not replace opening the source, and its health results are not medical advice.
 
 ## Contents
@@ -35,6 +37,32 @@ VerifAI is a tool for reading, not an oracle. It does not replace opening the so
 - web links
 - reference-list entries (`LeCun, Y., Bengio, Y., & Hinton, G. (2015). Deep learning. Nature.`)
 - arXiv IDs, PubMed IDs (PMID), PubMed Central IDs (PMC), and ISBNs
+
+**A claim against its own source.** Academic prose names its sources in the sentence, and VerifAI matches each one to the reference list:
+
+| In the sentence | Matched to |
+| --- | --- |
+| `(Northey et al., 2018)`, `(Lee & Park, 2019; Chen, 2021)` | the reference with that first author and year |
+| `Vaswani et al. (2017) showed that …` | the same, written into the sentence |
+| `[3]`, `[2, 4–6]` | entry 3 of a `[3] …` or `3. …` reference list |
+| a DOI, arXiv ID, or link in the sentence | that work or page |
+| nothing, in a paste with one source | that one source |
+
+The cited work is then read, in this order: its full text from arXiv, PubMed Central (through Europe PMC), an open-access PDF, or an open-access copy; else its abstract from OpenAlex, Europe PMC, Semantic Scholar, or Crossref; or, for a link, the page itself (or the Internet Archive's copy when the site refuses automated readers). A work with no DOI is found by its title. The passages that share the claim's terms are judged, and the card says one of:
+
+| Answer | Meaning |
+| --- | --- |
+| **Says this** | The source states the claim. The passage is quoted. |
+| **Contradicts this** | The source states something that cannot be true at the same time, such as a different number or the opposite finding. The passage is quoted. |
+| **Doesn't say this** | The source was read and does not state it. The card says whether the full text or only the abstract was read. |
+| **Source not found** | The cited work does not exist where the reference says. |
+| **Couldn't read it** | The work exists, but neither its text nor an abstract is open (a 1950 scan, for example). |
+
+A sentence about what a source says ("Northey et al. found that …", "According to Vaswani et al., …") is settled by that source: its own text decides it. Any other claim still needs two independent sources, and a cited source that takes a side counts as one of them.
+
+**Searching the literature.** Research claims, and every claim in a paste that carries references, are searched in **OpenAlex** (about 250 million works across every field), **arXiv**, and **Semantic Scholar** (with a free key), beside Wikipedia. Each paper counts as its own source; the same paper found twice counts once. Health claims go to PubMed and Europe PMC.
+
+**Google Scholar and ResearchGate.** Neither offers a public API, and both refuse automated requests (Google Scholar's robots.txt forbids it), so VerifAI cannot read them. OpenAlex and Semantic Scholar index the same literature, with open abstracts. Every citation and every cited source on the page has one-click **Google Scholar** and **ResearchGate** links, so you can look further there yourself.
 
 **What it sets aside on purpose:**
 
@@ -84,6 +112,7 @@ Confidence is how sure VerifAI is of that verdict, from 0 to 100%. It is not the
    | Checker | Sources | Used for |
    | --- | --- | --- |
    | General | Wikipedia, Wikidata, Google Fact Check, pages linked in the paste | Everyday facts |
+   | Research | OpenAlex, arXiv, Semantic Scholar (with a key), Wikipedia, and the work the sentence cites | Academic and technical claims, and every claim in a paste with references |
    | Health and science | PubMed and Europe PMC (systematic reviews first), Wikipedia, US federal health agencies (FDA, CDC, NIH, HHS), Google Fact Check | Medical and scientific wording. Every result says it is not medical advice |
    | News and politics | Major newsrooms, official US government sites, the Federal Register, Google Fact Check, Wikipedia and its current events, Wikidata, linked articles | Elections, governments, who holds an office now, anything "today" or "this week" |
    | Citation | doi.org, Crossref, OpenAlex, DataCite, PubMed, Open Library, a direct fetch, the Internet Archive | DOIs, links, references, arXiv, PMID, PMC, ISBN |
@@ -173,7 +202,7 @@ What this shows:
 
 On the public site (https://useverifai.vercel.app):
 
-- What you paste is sent to the public sources listed above to look things up.
+- What you paste is sent to the public sources listed above to look things up. A cited work is fetched from arXiv, Europe PMC, OpenAlex, Crossref, its open-access copy, or the Internet Archive to be read.
 - The key words of a news claim are searched on Google News, which indexes the newsrooms and government sites.
 - To judge passages, the claim and short passages from its sources go to an open-weights model (Gemma 4 26B) run by Cloudflare Workers AI. Cloudflare states that it does not use this data to train models.
 - Nothing you paste is stored in a database, and there are no accounts. Rate limits count requests per network address, in memory only.
@@ -237,7 +266,7 @@ Optional keys that add sources:
 
 - `VERIFAI_GOOGLE_FACTCHECK_API_KEY` turns on Google Fact Check reviews, which are strongest on viral claims and myths. The key is free: in Google Cloud, enable the Fact Check Tools API and create an API key.
 - `VERIFAI_OPENALEX_API_KEY` gives OpenAlex a larger daily budget than the shared free one.
-- `VERIFAI_SEMANTIC_SCHOLAR_API_KEY` adds Semantic Scholar as a third citation index. Without a key it is never called.
+- `VERIFAI_SEMANTIC_SCHOLAR_API_KEY` adds Semantic Scholar: a third citation index, a literature search for research claims, and abstracts for cited works that OpenAlex lacks. The key is free from Semantic Scholar. Without one it is never called.
 
 ### Try the example
 
@@ -361,7 +390,9 @@ See `CONTRIBUTING.md` before changing how verdicts are reached, and `SECURITY.md
 - **An encyclopedia can lag the news.** Right after a change (a new prime minister), Wikipedia and Wikidata may still say the old thing while newsrooms say the new one, and the claim comes back Mixed until they catch up.
 - **The AI judge can misread a passage.** The two-source rule limits the damage: one misread passage cannot decide a verdict.
 - **Wikipedia search can still pick a side article.** For example, it might pick an article about a disease's history when the claim is about its cause. Opening the article the claim names reduces this but does not remove it.
-- **A verified citation exists, but VerifAI does not read the paper.** It may still be irrelevant to the claim or misquoted.
+- **A cited paper behind a paywall is judged on its abstract.** When the full text is not open, the claim is read against the abstract, and "Doesn't say this" then means "not in the abstract"; the card says so. Old scanned papers with no abstract can't be read at all.
+- **Only the passages that share the claim's terms are read.** A claim worded very differently from its source can be missed and come back "Doesn't say this".
+- **Google Scholar and ResearchGate are linked, not read.** They have no public API and refuse automated requests.
 - **Citation search has blind spots.**
   - Unusual reference styles, references broken across lines in odd ways, and titles with internal abbreviations (`U.S.`) can be missed.
   - A bare `(Smith et al., 2021)` with no title is listed as "nothing to look up". It is not called fake.

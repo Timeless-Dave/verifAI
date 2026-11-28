@@ -134,6 +134,8 @@ def install(
         "eutils.ncbi.nlm.nih.gov",
         "www.ebi.ac.uk",
         "www.federalregister.gov",
+        "export.arxiv.org",
+        "arxiv.org",
     ):
         router.get(host=host).mock(side_effect=empty)
     router.get(host="news.google.com").mock(

@@ -37,6 +37,10 @@ SOURCE_LABELS = {
     "article": "Article",
     "pubmed": "PubMed",
     "europepmc": "Europe PMC",
+    "openalex_search": "OpenAlex",
+    "arxiv": "arXiv",
+    "semantic_scholar_search": "Semantic Scholar",
+    "cited_source": "The cited source",
     "major_news": "Major news outlets",
     "us_government": "US government sites",
     "federal_register": "Federal Register",
@@ -198,6 +202,26 @@ class CheckRequest(BaseModel):
         return cleaned
 
 
+class SourceCheck(BaseModel):
+    """The claim read against a source the paste cites for it."""
+
+    citation: str
+    title: str | None = None
+    url: str | None = None
+    # supports, contradicts, not_found (read, and it does not say this),
+    # unreadable (found, but no text could be read), missing (the citation
+    # itself could not be found).
+    status: Literal["supports", "contradicts", "not_found", "unreadable", "missing"]
+    # How much was read: "full text", "abstract", or "web page".
+    read: str | None = None
+    via: str | None = None
+    quote: str | None = None
+    reason: str | None = None
+    cited_as: str | None = None
+    confidence: float = 0.0
+    links: list[Link] = Field(default_factory=list)
+
+
 class CombinedClaim(BaseModel):
     """One claim after every selected expert has been corroborated together."""
 
@@ -209,6 +233,10 @@ class CombinedClaim(BaseModel):
     experts: list[str] = Field(default_factory=list)
     # What the sources say instead, when they contradict the claim.
     correction: str | None = None
+    # The claim read against the sources the paste cites for it.
+    source_checks: list[SourceCheck] = Field(default_factory=list)
+    # The sentence as pasted, with its in-text citations.
+    written: str | None = None
 
     @computed_field
     def verdict_label(self) -> str:

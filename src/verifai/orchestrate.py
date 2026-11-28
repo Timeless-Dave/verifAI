@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from verifai.claims import only_links, opinions, screen_paste, without_references
+from verifai.citelink import Link as CitationLink
+from verifai.citelink import link_sources
+from verifai.claims import only_links, opinions, screen_with_citations, without_references
 from verifai.corroboration import SourceVote, Stance, corroborate
 from verifai.experts.base import Expert
 from verifai.experts.claim_check import NOT_MEDICAL_ADVICE
@@ -17,8 +20,10 @@ from verifai.schemas import (
     CombinedClaim,
     EvidenceItem,
     ExpertResult,
+    SourceCheck,
     Verdict,
 )
+from verifai.source_check import as_evidence, claim_content
 
 
 @dataclass(frozen=True)
@@ -33,25 +38,62 @@ class CheckBundle:
     claims_skipped: tuple[str, ...] = ()
     # Pieces of the paste set aside because they address the checker.
     ignored: tuple[str, ...] = ()
+    # The paste's reference list, for the next batch of its claims.
+    sources: str = ""
 
 
-def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
-    results = [expert.check(text) for expert in router.select(text) if expert.name == "citation"]
-    combined: list[CombinedClaim] = []
-    subjects, ignored = _subjects(text)
-    checked = subjects[:limit]
-    for claim in checked:
-        experts = [expert for expert in router.select(claim) if expert.name != "citation"]
-        claim_results = [_check(expert, claim) for expert in experts]
-        results.extend(result for result in claim_results if result is not None)
-        present = [result for result in claim_results if result is not None]
-        if present:
-            combined.append(combine_claim(claim, present))
+def run_check(router: Router, text: str, *, limit: int = 5, sources: str = "") -> CheckBundle:
+    """Check a paste. ``sources`` is the reference list of an earlier batch of it."""
+    searched = f"{text}\n\n{sources}" if sources.strip() else text
+    results = [
+        expert.check(searched) for expert in router.select(searched) if expert.name == "citation"
+    ]
     citations = [
         item for result in results if result.expert == "citation" for item in result.citations
     ]
-    references = _numbered_references(text)
+    references = _numbered_references(searched)
+    subjects, ignored, written = _subjects(text)
+    checked = subjects[:limit]
+    checker = getattr(router, "source_checker", None)
+
+    def check_one(claim: str) -> tuple[CombinedClaim | None, list[ExpertResult]]:
+        as_written = written.get(claim, claim)
+        links = link_sources(as_written, citations, references, single_claim=len(subjects) == 1)
+        # A paste with references is academic writing: every claim in it is research.
+        experts = _experts_for(router, claim, cites=bool(links or citations))
+        # The checkers and the reading of the cited work run side by side.
+        with ThreadPoolExecutor(max_workers=len(experts) + 1) as pool:
+            reading = (
+                pool.submit(checker.check, claim, links) if links and checker is not None else None
+            )
+            claim_results = list(pool.map(lambda expert: _check(expert, claim), experts))
+            checks = reading.result() if reading is not None else []
+        present = [result for result in claim_results if result is not None]
+        if not present and not links:
+            return None, present
+        one = (
+            combine_claim(claim, present)
+            if present
+            else CombinedClaim(
+                claim=claim, verdict=Verdict.UNVERIFIABLE, confidence=0.0, explanation=""
+            )
+        )
+        if as_written != claim:
+            one = one.model_copy(update={"written": as_written})
+        if links and checker is not None:
+            one = _with_source_checks(one, checks, links)
+        return one, present
+
+    # A few claims at once: each waits mostly on sources and the model.
+    with ThreadPoolExecutor(max_workers=max(1, min(_CLAIMS_AT_ONCE, len(checked)))) as pool:
+        outcomes = list(pool.map(check_one, checked))
+    combined: list[CombinedClaim] = []
+    for one, present in outcomes:
+        results.extend(present)
+        if one is not None:
+            combined.append(one)
     combined = [_with_citation_notes(claim, citations, references) for claim in combined]
+    bundle_sources = _sources_text(citations, references)
     verdict, confidence, explanation = rollup(combined, results)
     if not subjects and not ignored and (taste := opinions(text)):
         quoted = "; ".join(f"“{item}”" for item in taste[:2])
@@ -72,9 +114,106 @@ def run_check(router: Router, text: str, *, limit: int = 5) -> CheckBundle:
         explanation,
         claims_found=len(subjects),
         claims_checked=len(checked),
-        claims_skipped=tuple(subjects[len(checked) :]),
+        claims_skipped=tuple(written.get(claim, claim) for claim in subjects[len(checked) :]),
         ignored=tuple(ignored),
+        sources=bundle_sources,
     )
+
+
+_CLAIMS_AT_ONCE = 3
+
+
+def _experts_for(router: Router, claim: str, *, cites: bool) -> list[Expert]:
+    """The claim's checkers. A claim that cites a work is research, whatever its words."""
+    experts = [expert for expert in router.select(claim) if expert.name != "citation"]
+    names = {expert.name for expert in experts}
+    if cites and not names & {"research", "health"}:
+        experts.extend(expert for expert in router.experts if expert.name == "research")
+    return experts
+
+
+def _with_source_checks(
+    claim: CombinedClaim, checks: list[SourceCheck], links: list[CitationLink]
+) -> CombinedClaim:
+    """Add what the cited sources say, and count each one that took a side as a source."""
+    cited = [
+        item
+        for check, link in zip(checks, links, strict=False)
+        if (item := as_evidence(check, link.citation)) is not None
+    ]
+    update: dict[str, object] = {"source_checks": checks}
+    if cited:
+        evidence = [*claim.evidence, *cited]
+        decision = corroborate(_votes(evidence))
+        update.update(
+            evidence=evidence,
+            verdict=decision.verdict,
+            confidence=decision.confidence,
+            explanation=decision.explanation,
+        )
+    decided = _attributed_verdict(claim.claim, checks)
+    if decided is not None:
+        update.update(decided)
+    notes = [_source_note(check) for check in checks]
+    text = " ".join(note for note in notes if note)
+    base = str(update.get("explanation", claim.explanation))
+    if text:
+        update["explanation"] = f"{base} {text}".strip()
+    return claim.model_copy(update=update)
+
+
+def _attributed_verdict(claim: str, checks: list[SourceCheck]) -> dict[str, object] | None:
+    """A claim about what a source says ("Northey et al. found that …") is that source's to settle.
+
+    Read against the work it names, a clear answer decides it: no second
+    source can say better what Northey et al. found.
+    """
+    if claim_content(claim) == claim:
+        return None
+    named = [
+        check
+        for check in checks
+        if check.cited_as
+        and check.status in {"supports", "contradicts"}
+        and check.confidence >= 0.7
+    ]
+    if len(named) != 1:
+        return None
+    check = named[0]
+    says = "says this" if check.status == "supports" else "contradicts this"
+    return {
+        "verdict": Verdict.SUPPORTED if check.status == "supports" else Verdict.UNSUPPORTED,
+        "confidence": round(0.9 * check.confidence, 2),
+        "explanation": (
+            f"This claim is about what {_short_title(check)} says, so that source decides it, "
+            f"and its {check.read or 'text'} {says}."
+        ),
+    }
+
+
+def _source_note(check: SourceCheck) -> str:
+    name = _short_title(check)
+    return {
+        "supports": f"The cited source ({name}) says this.",
+        "contradicts": f"The cited source ({name}) contradicts this.",
+        "not_found": f"The cited source ({name}) does not say this.",
+        "missing": f"The cited source ({name}) could not be found.",
+    }.get(check.status, "")
+
+
+def _short_title(check: SourceCheck) -> str:
+    title = check.title or check.citation
+    return f"“{title[:77]}…”" if len(title) > 80 else f"“{title}”"
+
+
+def _sources_text(citations: list[CitationResult], references: dict[str, str]) -> str:
+    """The paste's reference list, carried to later batches so their claims can cite it."""
+    lines = [
+        f"[{number}] {entry.split(']', 1)[-1].strip()}" for number, entry in references.items()
+    ]
+    numbered = " ".join(lines).casefold()
+    lines.extend(item.raw for item in citations if item.raw.casefold() not in numbered)
+    return "\n".join(dict.fromkeys(lines))[:20_000]
 
 
 _CITATION_WARNINGS = {
@@ -87,10 +226,13 @@ _CITATION_WARNINGS = {
 
 
 def _numbered_references(text: str) -> dict[str, str]:
-    """Reference-list entries by number: "[15] Mehra, M. R. …" under "15"."""
+    """Reference-list entries by number: "[15] Mehra, M. R. …", "15. Mehra MR …" under "15"."""
     entries: dict[str, str] = {}
     for line in (text or "").splitlines():
-        match = re.match(r"\s*\[(\d{1,3})\]\s+(\S.*)", line)
+        # "1." and "1)" lists (Vancouver) start with an author: "1. Doll R, Hill AB."
+        match = re.match(r"\s*\[(\d{1,3})\]\s+(\S.*)", line) or re.match(
+            r"\s*(\d{1,3})[.)]\s+([A-Z][\w'’-]+,?\s+[A-Z].*)", line
+        )
         if match:
             entries.setdefault(match.group(1), line.strip())
     return entries
@@ -192,15 +334,59 @@ def rollup(
         return claim_side
     claim_verdict, claim_confidence, claim_text = claim_side
     cited = f"Citations: {citation.explanation.split('. ')[0].rstrip('.')}."
+    misread = _misattributed(combined)
+    if misread:
+        cited = f"{cited} {misread}"
+        if claim_verdict is Verdict.SUPPORTED or claim_verdict is Verdict.UNVERIFIABLE:
+            return Verdict.MIXED, claim_confidence or 0.5, f"Claims: {claim_text} {cited}"
     if citation.verdict is Verdict.UNVERIFIABLE or citation.verdict is claim_verdict:
         return claim_verdict, claim_confidence, f"Claims: {claim_text} {cited}"
+    serious = any(item.status in _SERIOUS for item in citation.citations)
+    if not serious and claim_verdict is not Verdict.UNVERIFIABLE:
+        # Real citations say nothing about whether the claims are true; the claims decide.
+        return claim_verdict, claim_confidence, f"Claims: {claim_text} {cited}"
     if claim_verdict is Verdict.UNVERIFIABLE:
+        if citation.verdict is Verdict.SUPPORTED:
+            # Real papers do not make the claims true: they still have to say them.
+            return (
+                Verdict.UNVERIFIABLE,
+                0.0,
+                (
+                    f"Claims: {claim_text} {cited} The cited works exist, but the claims "
+                    "themselves are not yet confirmed."
+                ),
+            )
         return citation.verdict, citation.confidence, f"Claims: {claim_text} {cited}"
     return (
         Verdict.MIXED,
         min(claim_confidence, citation.confidence),
         f"Claims: {claim_text} {cited} The claims and the citations do not agree.",
     )
+
+
+# Citation faults that matter for a paste's verdict. A year off by one for a
+# preprint, or a venue nickname, does not.
+_SERIOUS = frozenset(
+    {
+        CitationStatus.NOT_FOUND,
+        CitationStatus.INVALID,
+        CitationStatus.RETRACTED,
+        CitationStatus.WRONG_WORK,
+    }
+)
+
+
+def _misattributed(combined: list[CombinedClaim]) -> str:
+    """Say how many claims lean on a source that contradicts them or does not say them."""
+    wrong = sum(
+        1
+        for claim in combined
+        if any(check.status in {"contradicts", "not_found"} for check in claim.source_checks)
+    )
+    if not wrong:
+        return ""
+    noun = "claim is" if wrong == 1 else "claims are"
+    return f"{wrong} {noun} not backed by the source cited for {'it' if wrong == 1 else 'them'}."
 
 
 def _rollup_claims(
@@ -221,18 +407,18 @@ def _rollup_claims(
     )
 
 
-def _subjects(text: str) -> tuple[list[str], list[str]]:
-    claims, ignored = screen_paste(text)
+def _subjects(text: str) -> tuple[list[str], list[str], dict[str, str]]:
+    claims, ignored, written = screen_with_citations(text)
     if claims:
-        return claims, ignored
+        return claims, ignored, written
     if ignored:
-        return [], ignored  # never fall back to checking text that addressed the checker
+        return [], ignored, {}  # never fall back to checking text that addressed the checker
     cleaned = " ".join(without_references(text).split())
     if only_links(cleaned):
-        return [], ignored
+        return [], ignored, {}
     if cleaned and domains_for(cleaned):
-        return [cleaned[:800]], ignored
-    return [], ignored
+        return [cleaned[:800]], ignored, {}
+    return [], ignored, {}
 
 
 def _check(expert: Expert, claim: str) -> ExpertResult | None:

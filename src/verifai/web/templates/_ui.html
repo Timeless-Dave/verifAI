@@ -61,6 +61,19 @@
     {% if card.translation %}<p class="translated">{{ icon("i-globe") }}<span><span class="muted">Read in English as</span> “{{ card.translation }}”</span></p>{% endif %}
     <p class="claim-line">{{ card.headline }}</p>
     {% if card.correction %}<p class="correction">{{ icon("i-pen") }}<span><span class="correction-label">{{ card.correction_label }}</span> {{ card.correction }}</span></p>{% endif %}
+    {% if card.sources %}
+    <div class="cited">
+      <p class="cited-head">{{ icon("i-book") }}Checked against the source it cites</p>
+      {% for s in card.sources %}
+      <div class="cited-row">
+        <div class="cited-top">{{ badge(s.badge) }}<span class="cited-title">{% if s.url %}<a href="{{ s.url }}" rel="noopener noreferrer">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %}</span>{% if s.cited_as %}<span class="tag">{{ s.cited_as }}</span>{% endif %}</div>
+        {% if s.quote %}<blockquote class="cited-quote">“{{ s.quote }}”</blockquote>{% endif %}
+        {% if s.note or s.read %}<p class="cited-note">{{ s.note }}{% if s.read %} <span class="muted">{{ s.read }}</span>{% endif %}</p>{% endif %}
+        {% if s.links %}<p class="cited-links">{% for l in s.links %}<a href="{{ l.url }}" rel="noopener noreferrer" target="_blank">{{ icon("i-search") }}{{ l.label }}</a>{% endfor %}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% if card.judged %}{{ balance(card) }}{% endif %}
     {% if card.confidence is not none %}{{ meter(card.confidence, card.badge.tone) }}{% endif %}
     <details class="why">
@@ -87,12 +100,13 @@
 </article>
 {%- endmacro %}
 
-{% macro continue_block(skipped, offset, total, batch, paused="") -%}
+{% macro continue_block(skipped, offset, total, batch, paused="", sources="") -%}
 {% if skipped %}
 <form class="more{% if paused %} more-paused{% endif %}" hx-post="/check/more" hx-trigger="{% if paused %}submit{% else %}load delay:250ms{% endif %}" hx-swap="outerHTML" data-more>
   <input type="hidden" name="text" value="{{ skipped|join('\n') }}">
   <input type="hidden" name="offset" value="{{ offset }}">
   <input type="hidden" name="total" value="{{ total }}">
+  {% if sources %}<input type="hidden" name="sources" value="{{ sources }}">{% endif %}
   {% if paused %}
   <span class="more-label" role="status">{{ paused }}</span>
   <button type="submit" class="ghost">Resume checking</button>

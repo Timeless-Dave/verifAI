@@ -18,11 +18,14 @@ from verifai.schemas import (
     CitationStatus,
     CombinedClaim,
     EvidenceItem,
+    Link,
+    SourceCheck,
     Verdict,
     source_label,
 )
+from verifai.source_check import search_links
 
-_LITERATURE = {"pubmed", "europepmc"}
+_LITERATURE = {"pubmed", "europepmc", "openalex", "arxiv", "semantic_scholar"}
 _AMBIGUOUS_DATE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{2,4})\b")
 
 
@@ -77,6 +80,47 @@ class ClaimCard:
     # What the sources say instead, or how they spell a name.
     correction: str | None = None
     correction_label: str = "What the sources say"
+    # The claim read against the works the paste cites for it.
+    sources: list[SourceCard] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SourceCard:
+    """One cited work, and what it says about the claim."""
+
+    badge: Badge
+    title: str
+    url: str | None
+    cited_as: str | None
+    quote: str | None
+    note: str
+    read: str
+    links: list[Link]
+
+
+SOURCE_BADGES = {
+    "supports": Badge("good", "i-check", "Says this"),
+    "contradicts": Badge("critical", "i-cross", "Contradicts this"),
+    "not_found": Badge("warning", "i-split", "Doesn't say this"),
+    "missing": Badge("critical", "i-ban", "Source not found"),
+    "unreadable": Badge("neutral", "i-question", "Couldn't read it"),
+}
+
+
+def source_card(check: SourceCheck) -> SourceCard:
+    read = ""
+    if check.read:
+        read = f"Read: its {check.read}" + (f", via {check.via}" if check.via else "") + "."
+    return SourceCard(
+        badge=SOURCE_BADGES[check.status],
+        title=check.title or check.citation,
+        url=check.url,
+        cited_as=check.cited_as,
+        quote=check.quote,
+        note=check.reason or "",
+        read=read,
+        links=list(check.links),
+    )
 
 
 @dataclass(frozen=True)
@@ -93,6 +137,8 @@ class CitationCard:
     sources: list[str]
     sources_down: list[str]
     confidence: float
+    # Look the work up in Google Scholar and ResearchGate.
+    search_links: list[Link] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -112,6 +158,8 @@ class PageView:
     judged: bool = True
     confidence_label: str = "Confidence"
     ignored: list[str] = field(default_factory=list)
+    # The paste's reference list, carried to later batches.
+    sources: str = ""
     unchecked_pointers: list[str] = field(default_factory=list)
 
 
@@ -190,6 +238,7 @@ def build_view(bundle: CheckBundle, *, judged: bool = True, text: str = "") -> P
         claims=claims,
         citations=[citation_card(item) for item in citations],
         skipped=list(bundle.claims_skipped),
+        sources=bundle.sources,
     )
 
 
@@ -221,6 +270,11 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
     unreadable = "could not translate this claim reliably" in claim.explanation
     if unreadable:
         flags.append("Translation uncertain: try it in English")
+    statuses = {check.status for check in claim.source_checks}
+    if "contradicts" in statuses:
+        flags.append("Its cited source contradicts it")
+    elif "not_found" in statuses and "supports" not in statuses:
+        flags.append("Not in its cited source")
     if "Right event, wrong date" in claim.explanation:
         flags.append("Right event, wrong date")
     if claim.verdict is Verdict.UNVERIFIABLE and refute and not support:
@@ -273,6 +327,7 @@ def claim_card(claim: CombinedClaim, *, judged: bool = True) -> ClaimCard:
         translation=_translation(claim.explanation),
         correction=_correction_text(claim.correction),
         correction_label=_correction_label(claim.correction),
+        sources=[source_card(check) for check in claim.source_checks],
     )
 
 
@@ -322,6 +377,7 @@ def citation_card(item: CitationResult) -> CitationCard:
         sources=item.sources_contributed,
         sources_down=item.sources_unavailable,
         confidence=item.confidence,
+        search_links=search_links(item.matched_title or item.raw),
     )
 
 

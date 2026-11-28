@@ -132,6 +132,7 @@ def build_web_router() -> APIRouter:
         text: Annotated[str, Form()] = "",
         offset: Annotated[int, Form(ge=0, le=100_000)] = 0,
         total: Annotated[int, Form(ge=0, le=100_000)] = 0,
+        sources: Annotated[str, Form(max_length=20_000)] = "",
     ) -> HTMLResponse:
         """The next batch of claims from a paste, appended where the last one ended."""
         settings = request.app.state.settings
@@ -144,9 +145,10 @@ def build_web_router() -> APIRouter:
             "skipped": claims,
             "cards": [],
             "paused": "",
+            "sources": sources,
         }
         try:
-            bundle = _run(request, "\n".join(claims))
+            bundle = _run(request, "\n".join(claims), sources=sources)
         except Throttled as refused:
             context["paused"] = refused.message
             return _render(request, "more.html", context)
@@ -202,12 +204,12 @@ def build_web_router() -> APIRouter:
     return router
 
 
-def _run(request: Request, text: str) -> CheckBundle:
+def _run(request: Request, text: str, *, sources: str = "") -> CheckBundle:
     state = request.app.state
     client = _client_address(request)
     state.rate_limiter.admit(client)
     with state.check_slots.hold():
-        return run_check(state.router, text, limit=state.settings.max_claims)
+        return run_check(state.router, text, limit=state.settings.max_claims, sources=sources)
 
 
 _JUDGE_LOCK = threading.Lock()

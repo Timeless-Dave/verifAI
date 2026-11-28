@@ -50,7 +50,7 @@
 <section class="group" aria-labelledby="claims-h">
   <h2 id="claims-h" class="group-title">The claims <span id="claims-count" class="count">{{ view.claims|length }} checked{% if view.skipped %} of {{ view.claims_found }}{% endif %}</span></h2>
   {% for card in view.claims %}{{ claim_entry(card, loop.index) }}{% endfor %}
-  {{ continue_block(view.skipped, view.claims|length, view.claims_found, view.claims|length) }}
+  {{ continue_block(view.skipped, view.claims|length, view.claims_found, view.claims|length, "", view.sources) }}
 </section>
 {% endif %}
 
@@ -69,6 +69,7 @@
       {% if c.matched_title %}
       <p class="cite-match">{{ icon("i-book") }}<span><span class="muted">On record as</span> {% if c.matched_url %}<a href="{{ c.matched_url }}" rel="noopener noreferrer">{{ c.matched_title }}</a>{% else %}{{ c.matched_title }}{% endif %}{% if c.matched_meta %} <span class="muted">· {{ c.matched_meta }}</span>{% endif %}</span></p>
       {% endif %}
+      {% if c.search_links %}<p class="cited-links">{% for l in c.search_links %}<a href="{{ l.url }}" rel="noopener noreferrer" target="_blank">{{ icon("i-search") }}{{ l.label }}</a>{% endfor %}</p>{% endif %}
       {% if c.mismatches %}
       <ul class="mismatches">{% for m in c.mismatches %}<li>{{ icon("i-alert") }}<span>{{ m }}</span></li>{% endfor %}</ul>
       {% endif %}

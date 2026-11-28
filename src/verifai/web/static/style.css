@@ -166,6 +166,20 @@ button, .masthead-strap, .masthead-nav, .promises, .site-foot, .evidence .source
 .translated { display: flex; gap: 8px; align-items: flex-start; margin: -2px 0 8px; font-size: 15px; color: var(--ink-2); }
 .translated .icon { width: 16px; height: 16px; margin-top: 3px; flex: none; }
 
+/* The claim read against the work it cites */
+.cited { margin: 6px 0 14px; padding: 12px 14px; border: 1px solid var(--rule-soft); background: var(--sheet); }
+.cited-head { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; font: 700 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.cited-head .icon { width: 15px; height: 15px; }
+.cited-row + .cited-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule-soft); }
+.cited-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cited-title { font-size: 15px; line-height: 1.35; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.cited-title a { color: inherit; }
+.cited-quote { margin: 10px 0 6px; padding: 2px 0 2px 12px; border-left: 3px solid var(--rule-soft); font-style: italic; font-size: 15.5px; line-height: 1.5; color: var(--ink); }
+.cited-note { margin: 4px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.cited-links { display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0 0; font: 12px var(--mono); }
+.cited-links a { display: inline-flex; gap: 5px; align-items: center; color: var(--ink-2); }
+.cited-links .icon { width: 13px; height: 13px; }
+
 /* What the sources say instead: a margin note, in ink, beside the verdict */
 .correction { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 12px; padding: 10px 12px; border-left: 3px solid var(--true); background: var(--sheet); font-size: 16px; line-height: 1.45; color: var(--ink); }
 .correction .icon { width: 17px; height: 17px; margin-top: 3px; flex: none; color: var(--true-ink); }

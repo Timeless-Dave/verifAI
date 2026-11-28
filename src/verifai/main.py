@@ -19,10 +19,13 @@ from verifai.experts.citation import build_citation_expert
 from verifai.experts.general import build_general_expert
 from verifai.experts.health import build_health_expert
 from verifai.experts.news import build_news_expert
+from verifai.experts.research import build_research_expert
 from verifai.experts.router import Router
 from verifai.http import PoliteHttp
 from verifai.logging import configure_logging, request_id_var
 from verifai.models.judge import build_judge
+from verifai.source_check import SourceChecker
+from verifai.source_reader import SourceReader
 from verifai.web.limits import BodySizeLimitMiddleware
 from verifai.web.request_id import RequestIdMiddleware, request_id_from_scope
 from verifai.web.routes import STATIC_DIR, build_web_router
@@ -72,12 +75,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         general = build_general_expert(http, settings, judge)
         health = build_health_expert(http, settings, judge)
         news = build_news_expert(http, settings, judge)
+        research = build_research_expert(http, settings, judge)
+        checker = SourceChecker(
+            SourceReader(http, settings), judge, workers=settings.max_concurrency
+        )
         app.state.settings = settings
         app.state.http = http
         app.state.judge = judge
-        app.state.router = Router([citation, general, health, news])
+        app.state.router = Router(
+            [citation, general, health, news, research], source_checker=checker
+        )
         log.info(
-            "VerifAI %s ready. Model: %s. Experts: citation, general, health, news.",
+            "VerifAI %s ready. Model: %s. Experts: citation, general, health, news, research.",
             settings.app_version,
             judge.name,
         )

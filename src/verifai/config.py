@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     cache_ttl_seconds: float = Field(default=60 * 60, ge=0)
     negative_cache_ttl_seconds: float = Field(default=10 * 60, ge=0)
     max_text_chars: int = Field(default=50_000, ge=1, le=200_000)
-    max_concurrency: int = Field(default=4, ge=1, le=16)
+    max_concurrency: int = Field(default=6, ge=1, le=16)
     openalex_api_key: str | None = None
     semantic_scholar_api_key: str | None = None
     google_factcheck_api_key: str | None = None
