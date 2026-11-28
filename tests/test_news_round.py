@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from datetime import date
 
 import httpx
@@ -88,6 +89,8 @@ class _Judge:
     def judge(self, claim: str, passage: str) -> Judgment:
         del claim, passage
         self.threads.add(threading.get_ident())
+        # Long enough that one worker cannot take every passage before the others start.
+        time.sleep(0.02)
         return Judgment(Stance.REFUTES, 0.9, "It names a different city.")
 
     def correct(self, claim: str, evidence: list[str]) -> str | None:

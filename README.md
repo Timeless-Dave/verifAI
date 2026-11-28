@@ -408,6 +408,10 @@ See `CONTRIBUTING.md` before changing how verdicts are reached, and `SECURITY.md
 - **The cache lives in memory.** A restart clears it.
 - **Health results report what studies say.** They are not medical advice.
 
+## Acknowledgements
+
+Paper records and abstracts come from [Semantic Scholar](https://www.semanticscholar.org) (Kinney et al., 2023, *The Semantic Scholar Open Data Platform*, arXiv:2301.10140), [OpenAlex](https://openalex.org), [CORE](https://core.ac.uk), Crossref, DataCite, arXiv, PubMed, and Europe PMC.
+
 ## License
 
 MIT. See `LICENSE`. The page includes [htmx 2.0.4](https://htmx.org/) under the Zero-Clause BSD license (`src/verifai/web/static/htmx.LICENSE`).

@@ -82,3 +82,15 @@ def test_read_timeout_waits_longer_than_connect():
     short = request_timeout(2)
     assert short.read == 2
     assert short.connect == 2
+
+
+def test_a_strict_host_skips_requests_that_would_queue_too_long() -> None:
+    from verifai.http import STRICT_HOSTS
+
+    waits: list[float] = []
+    # Requests arriving together: the clock does not move while they queue.
+    pacer = HostPacer(0.2, strict=STRICT_HOSTS, monotonic=lambda: 0.0, sleep=waits.append)
+    s2 = "https://api.semanticscholar.org/graph/v1/paper/DOI:10.1/x"
+    assert [pacer.wait(s2) for _ in range(5)] == [True, True, True, False, False]
+    assert waits == [1.1, 2.2]
+    assert pacer.wait("https://api.crossref.org/works")

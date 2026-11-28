@@ -86,37 +86,54 @@ class TTLCache:
             self._data.clear()
 
 
+# Hosts with a stricter budget than the default gap: (seconds between
+# requests, longest wait before the request is skipped instead). Semantic
+# Scholar's keys allow one request a second across every endpoint; a check
+# that would queue longer goes on without it rather than stall.
+STRICT_HOSTS: dict[str, tuple[float, float]] = {
+    "api.semanticscholar.org": (1.1, 3.0),
+}
+
+
 class HostPacer:
     """Minimum gap between requests to the same host.
 
     An interval of zero disables the wait. Different hosts do not block
     each other, so Crossref and OpenAlex can still be asked together.
+    A strict host's request is refused (``wait`` returns False) when its
+    turn is further off than that host allows.
     """
 
     def __init__(
         self,
         interval: float,
         *,
+        strict: dict[str, tuple[float, float]] | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.interval = interval
+        self.strict = strict or {}
         self._monotonic = monotonic
         self._sleep = sleep
         self._lock = threading.Lock()
         self._next_by_host: dict[str, float] = {}
 
-    def wait(self, url: str) -> None:
-        if self.interval <= 0:
-            return
+    def wait(self, url: str) -> bool:
         host = urlsplit(url).netloc.lower()
+        interval, longest = self.strict.get(host, (self.interval, float("inf")))
+        if interval <= 0:
+            return True
         with self._lock:
             now = self._monotonic()
             earliest = self._next_by_host.get(host, now)
             delay = max(0.0, earliest - now)
-            self._next_by_host[host] = max(now, earliest) + self.interval
+            if delay > longest:
+                return False
+            self._next_by_host[host] = max(now, earliest) + interval
         if delay > 0:
             self._sleep(delay)
+        return True
 
 
 class PoliteHttp:
@@ -130,7 +147,9 @@ class PoliteHttp:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.cache = TTLCache()
-        self.pacer = HostPacer(settings.http_min_interval_seconds)
+        gap = settings.http_min_interval_seconds
+        # A gap of zero turns pacing off, strict hosts included (tests, local runs).
+        self.pacer = HostPacer(gap, strict=STRICT_HOSTS if gap > 0 else None)
         self.client = httpx.Client(
             timeout=request_timeout(settings.http_timeout),
             headers={"User-Agent": settings.user_agent},
@@ -220,7 +239,8 @@ class PoliteHttp:
         params: Mapping[str, Any] | None,
         headers: dict[str, str] | None,
     ) -> HttpResult:
-        self.pacer.wait(url)
+        if not self.pacer.wait(url):
+            return _over_budget(url)
         try:
             response = self.client.request(
                 method,
@@ -239,7 +259,8 @@ class PoliteHttp:
         return _cap_body(_from_response(response), self.settings.http_max_response_bytes)
 
     def _stream_get(self, url: str) -> HttpResult:
-        self.pacer.wait(url)
+        if not self.pacer.wait(url):
+            return _over_budget(url)
         try:
             with self.client.stream("GET", url, headers={"Accept": "*/*"}) as response:
                 chunks = bytearray()
@@ -282,8 +303,22 @@ def _refuse_private_redirect(response: httpx.Response) -> None:
         raise BlockedRedirect(f"redirect refused: {problem}", request=response.request)
 
 
+_OVER_BUDGET = "OverBudget"
+
+
+def _over_budget(url: str) -> HttpResult:
+    """A request skipped because its host's rate budget is spent for now."""
+    return HttpResult(
+        url=url,
+        status_code=None,
+        content=b"",
+        headers={},
+        error=f"{_OVER_BUDGET}: this source allows few requests a second, so it was skipped",
+    )
+
+
 def _retryable(result: HttpResult) -> bool:
-    if result.error is not None and result.error.startswith("BlockedRedirect"):
+    if result.error is not None and result.error.startswith(("BlockedRedirect", _OVER_BUDGET)):
         return False
     return result.error is not None or result.status_code in RETRY_STATUSES
 
