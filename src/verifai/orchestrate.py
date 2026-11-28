@@ -7,6 +7,8 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+from rapidfuzz import fuzz
+
 from verifai.citelink import Link as CitationLink
 from verifai.citelink import link_sources
 from verifai.claims import only_links, opinions, screen_with_citations, without_references
@@ -23,7 +25,8 @@ from verifai.schemas import (
     SourceCheck,
     Verdict,
 )
-from verifai.source_check import as_evidence, claim_content
+from verifai.source_check import ATTACHED, as_evidence, claim_content
+from verifai.source_reader import SourceText, identifiers
 
 
 @dataclass(frozen=True)
@@ -42,8 +45,20 @@ class CheckBundle:
     sources: str = ""
 
 
-def run_check(router: Router, text: str, *, limit: int = 5, sources: str = "") -> CheckBundle:
-    """Check a paste. ``sources`` is the reference list of an earlier batch of it."""
+def run_check(
+    router: Router,
+    text: str,
+    *,
+    limit: int = 5,
+    sources: str = "",
+    paper: SourceText | None = None,
+) -> CheckBundle:
+    """Check a paste. ``sources`` is the reference list of an earlier batch of it.
+
+    ``paper`` is a work the user attached. When the paste cites it, the claims
+    that cite it are read against the attached text; when it cites nothing that
+    matches, every claim is.
+    """
     searched = f"{text}\n\n{sources}" if sources.strip() else text
     results = [
         expert.check(searched) for expert in router.select(searched) if expert.name == "citation"
@@ -55,10 +70,13 @@ def run_check(router: Router, text: str, *, limit: int = 5, sources: str = "") -
     subjects, ignored, written = _subjects(text)
     checked = subjects[:limit]
     checker = getattr(router, "source_checker", None)
+    attached_to = _attached_citation(paper, citations) if paper is not None else None
 
     def check_one(claim: str) -> tuple[CombinedClaim | None, list[ExpertResult]]:
         as_written = written.get(claim, claim)
         links = link_sources(as_written, citations, references, single_claim=len(subjects) == 1)
+        if paper is not None:
+            links = _with_paper(links, paper, attached_to)
         # A paste with references is academic writing: every claim in it is research.
         experts = _experts_for(router, claim, cites=bool(links or citations))
         # The checkers and the reading of the cited work run side by side.
@@ -121,6 +139,45 @@ def run_check(router: Router, text: str, *, limit: int = 5, sources: str = "") -
 
 
 _CLAIMS_AT_ONCE = 3
+
+
+def _attached_citation(paper: SourceText, citations: list[CitationResult]) -> CitationResult | None:
+    """The paste's citation of the attached paper, if it cites it."""
+    doi = (paper.url or "").removeprefix("https://doi.org/").lower()
+    title = (paper.title or "").casefold()
+    for citation in citations:
+        if doi and identifiers(citation).doi == doi:
+            return citation
+        named = (citation.matched_title or "").casefold()
+        if len(title) >= 20 and (
+            (named and fuzz.token_sort_ratio(named, title) >= 85)
+            or fuzz.partial_ratio(title, citation.raw.casefold()) >= 92
+        ):
+            return citation
+    return None
+
+
+def _with_paper(
+    links: list[CitationLink], paper: SourceText, attached_to: CitationResult | None
+) -> list[CitationLink]:
+    """Read the attached paper in place of fetching the work it is."""
+    if attached_to is not None:
+        return [
+            CitationLink(link.citation, link.cited_as, document=paper)
+            if link.citation is attached_to
+            else link
+            for link in links
+        ]
+    own = CitationResult(
+        raw=paper.title or "your PDF",
+        kind="reference",
+        status=CitationStatus.VERIFIED,
+        confidence=1.0,
+        explanation="The paper you attached.",
+        matched_title=paper.title,
+        matched_url=paper.url,
+    )
+    return [CitationLink(own, ATTACHED, document=paper), *links][:3]
 
 
 def _experts_for(router: Router, claim: str, *, cites: bool) -> list[Expert]:

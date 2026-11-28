@@ -395,7 +395,7 @@ _GENERIC = frozenset(
         "false",
     ]
 )
-_LITERATURE = frozenset({"pubmed", "europepmc", "openalex", "arxiv", "semantic_scholar"})
+_LITERATURE = frozenset({"pubmed", "europepmc", "openalex", "arxiv", "semantic_scholar", "core"})
 _HEADLINES = ("outlet:", "gov:")
 _NOT_ABOUT = re.compile(
     r"\b(?:does not|doesn't|do not|did not|never|no)\s+(?:\w+\s+){0,2}"

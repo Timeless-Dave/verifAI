@@ -13,6 +13,7 @@ import unicodedata
 from dataclasses import dataclass
 
 from verifai.schemas import CitationResult, CitationStatus
+from verifai.source_reader import SourceText
 
 _NUMBERED = re.compile(r"\[\s*(\d{1,3}(?:\s*[,–-]\s*\d{1,3})*)\s*\]")
 _PAREN = re.compile(r"\(([^()]*?(?:19|20)\d{2}[a-z]?[^()]*)\)")
@@ -59,6 +60,8 @@ class Link:
     # How the sentence cited it: "(Northey et al., 2018)", or None when the
     # paste holds this one source and the sentence names none.
     cited_as: str | None
+    # The work's text when the user attached it, so it need not be fetched.
+    document: SourceText | None = None
 
 
 def markers_in(sentence: str) -> list[Marker]:

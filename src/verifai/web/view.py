@@ -214,6 +214,14 @@ def build_view(bundle: CheckBundle, *, judged: bool = True, text: str = "") -> P
     elif not resolved and citations:
         label = "Citation check confidence"
     pointers = dangling_markers(text) + unresolvable_mentions(text) if text else []
+    # A marker matched to a reference was read; it points at something after all.
+    linked = {
+        _marker_key(check.cited_as)
+        for claim in bundle.combined
+        for check in claim.source_checks
+        if check.cited_as
+    }
+    pointers = [pointer for pointer in pointers if _marker_key(pointer) not in linked]
     badge = VERDICT_BADGES[bundle.verdict]
     # One supported claim beside two unverified ones is not a supported paste.
     if bundle.combined and 0 < resolved < len(bundle.combined):
@@ -339,6 +347,18 @@ def _translation(explanation: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _marker_key(marker: str) -> str:
+    return " ".join(marker.casefold().strip(" .;()").split())
+
+
+def _mid_sentence(name: str) -> str:
+    """ "The cited source" reads "the cited source" after "Only"; names keep their capitals."""
+    first, _, rest = name.partition(" ")
+    if first in {"The", "Your"} and rest:
+        return f"{first.lower()} {rest}"
+    return name
+
+
 def claim_headline(
     verdict: Verdict, support: list[str], refute: list[str], evidence: list[EvidenceItem]
 ) -> str:
@@ -351,9 +371,9 @@ def claim_headline(
     if support and refute:
         return "The sources that answered disagree, and neither side has two."
     if len(support) == 1 and not refute:
-        return f"Only {support[0]} backs this up. A verdict needs two independent sources."
+        return f"Only {_mid_sentence(support[0])} backs this up. A verdict needs two independent sources."
     if len(refute) == 1 and not support:
-        return f"Only {refute[0]} contradicts this. A verdict needs two independent sources."
+        return f"Only {_mid_sentence(refute[0])} contradicts this. A verdict needs two independent sources."
     if not evidence:
         return "No source was found for this claim."
     return "No source clearly addressed this claim."

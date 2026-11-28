@@ -136,6 +136,7 @@ def install(
         "www.federalregister.gov",
         "export.arxiv.org",
         "arxiv.org",
+        "api.core.ac.uk",
     ):
         router.get(host=host).mock(side_effect=empty)
     router.get(host="news.google.com").mock(

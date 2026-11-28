@@ -32,9 +32,14 @@
 <div class="notice">{{ icon("i-question") }}<p>The contact address is still the example placeholder. Set <code>VERIFAI_MAILTO</code> in <code>.env</code> so Crossref can put this client in its polite pool.</p></div>
 {% endif %}
 
-<form class="check-form" method="post" action="/check" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator=".check-form" hx-disabled-elt="find button">
+<form class="check-form" method="post" action="/check" enctype="multipart/form-data" hx-encoding="multipart/form-data" hx-post="/check" hx-target="#results" hx-swap="innerHTML" hx-indicator=".check-form" hx-disabled-elt="find button">
   <label for="claim" class="label">Paste what you want checked</label>
   <textarea id="claim" name="text" rows="9" required placeholder="A chatbot answer, a forwarded message, a news excerpt, or a reference list…">{{ text }}</textarea>
+  <div class="attach">
+    <label for="paper" class="attach-label">{{ icon("i-book") }}<span>Attach the paper <span class="muted">(optional PDF, up to 4 MB)</span></span></label>
+    <input type="file" id="paper" name="paper" accept="application/pdf,.pdf">
+    <p class="attach-note">Not needed: VerifAI finds and reads the papers a paste cites. Attach one only when it is paywalled or not online. The file is read for this check and never kept.</p>
+  </div>
   <div class="form-row">
     <button type="submit" class="primary"><span class="btn-label">Check it</span><span id="spinner" class="spinner" aria-hidden="true"></span></button>
     <button type="button" class="ghost" data-load-example>Try an example</button>
@@ -54,7 +59,7 @@
   <h2 id="how-h" class="how-title">How it works</h2>
     <ol class="flow">
       <li><span class="flow-icon">{{ icon("i-clip") }}</span><b>Paste</b><span>Claims, links, DOIs, references, in any language.</span></li>
-      <li><span class="flow-icon">{{ icon("i-search") }}</span><b>Search</b><span>The papers you cite, OpenAlex, arXiv, PubMed, Crossref, AP, Reuters and 60 newsrooms, the FDA and CDC, Wikipedia, fact-checkers, live. It keeps going if one is down.</span></li>
+      <li><span class="flow-icon">{{ icon("i-search") }}</span><b>Search</b><span>The papers you cite, OpenAlex, arXiv, CORE, PubMed, Crossref, AP, Reuters and 60 newsrooms, the FDA and CDC, Wikipedia, fact-checkers, live. It keeps going if one is down.</span></li>
       <li><span class="flow-icon">{{ icon("i-scale") }}</span><b>Weigh</b><span>Each passage is read beside the claim. A verdict needs two independent sources.</span></li>
       <li><span class="flow-icon flow-stamp">{{ icon("i-check") }}</span><b>Verdict</b><span>Supported, refuted, or unverified, with every source linked, and what the sources say instead when it is wrong.</span></li>
     </ol>

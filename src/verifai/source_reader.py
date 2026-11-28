@@ -8,17 +8,25 @@ The order follows what is free and dependable:
   with pypdf), then Semantic Scholar (with a key) and Crossref for the abstract.
 - A PMID: the Europe PMC record, and its full text when there is one.
 - A link: the page itself, HTML or PDF.
+- CORE, which gathers open-access papers from university and subject
+  repositories: the full text with a key, else the abstract when no other
+  route had one.
+- A paper the user attached as a PDF (``attached_paper``).
 
 Google Scholar and ResearchGate are not read: neither has a public API, and
 both refuse automated requests. OpenAlex and Semantic Scholar index the same
-literature.
+literature, and CORE holds much of what authors post to repositories.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import io
+import json
 import re
-from dataclasses import dataclass
+import zlib
+from dataclasses import dataclass, replace
 from urllib.parse import quote, urlsplit
 
 from pypdf import PdfReader
@@ -33,6 +41,12 @@ from verifai.schemas import CitationResult
 
 _FULL_TEXT_LIMIT = 400_000
 _PDF_PAGES = 40
+_ATTACHED_PAGES = 80
+_PRINTED_ARXIV = re.compile(r"\barXiv:(\d{4}\.\d{4,5})(?:v\d+)?\b", re.IGNORECASE)
+_ABSTRACT_END = re.compile(
+    r"\n\n|\b(?:keywords|key words|introduction|background|1\.\s+introduction)\b",
+    re.IGNORECASE,
+)
 _ARXIV_ID = re.compile(r"(?:arxiv[:./\s]*|abs/|html/|pdf/)(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
 _DOI = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+)", re.IGNORECASE)
 _PMCID = re.compile(r"\bPMC\d{4,9}\b", re.IGNORECASE)
@@ -100,6 +114,30 @@ class SourceReader:
     def read(self, citation: CitationResult) -> SourceText | None:
         ids = identifiers(citation)
         title = citation.matched_title
+        found = self._open_routes(citation, ids, title)
+        if found is not None and found.read != "abstract":
+            return found
+        # Without a key CORE allows a handful of requests a minute and holds
+        # back its full text: ask it only when nothing else had an abstract.
+        if found is not None and not self.settings.core_api_key:
+            return found
+        core = self._core(ids.doi, title or (found.title if found else None))
+        if core is None:
+            return found
+        if found is not None and core.read == "full text":
+            return SourceText(
+                found.title,
+                found.url,
+                "full text",
+                found.abstract or core.abstract,
+                core.body,
+                "CORE",
+            )
+        return found or core
+
+    def _open_routes(
+        self, citation: CitationResult, ids: Identifiers, title: str | None
+    ) -> SourceText | None:
         if ids.arxiv:
             found = self._arxiv(ids.arxiv, title)
             if found:
@@ -270,6 +308,69 @@ class SourceReader:
             return SourceText(title, url, "abstract", abstract, "", "OpenAlex")
         return None
 
+    def named(self, paper: SourceText) -> SourceText:
+        """An attached paper under its real title, found by the DOI or arXiv ID it prints.
+
+        Many PDFs, arXiv's among them, carry no title of their own.
+        """
+        arxiv = _PRINTED_ARXIV.search(paper.body[:8000])
+        doi = (paper.url or "").removeprefix("https://doi.org/") or (
+            f"10.48550/arxiv.{arxiv.group(1)}" if arxiv else ""
+        )
+        if not doi:
+            return paper
+        params: dict[str, str] = {"mailto": self.settings.mailto, "select": "display_name"}
+        if self.settings.openalex_api_key:
+            params["api_key"] = self.settings.openalex_api_key
+        result = self.http.get(f"https://api.openalex.org/works/doi:{doi}", params=params)
+        body = result.json_body() if result.ok else None
+        name = body.get("display_name") if isinstance(body, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            return paper
+        url = paper.url or (f"https://arxiv.org/abs/{arxiv.group(1)}" if arxiv else None)
+        return replace(paper, title=" ".join(name.split()), url=url)
+
+    def _core(self, doi: str | None, title: str | None) -> SourceText | None:
+        """The work in CORE: its full text with a key, else its abstract."""
+        if doi:
+            query = f'doi:"{doi}"'
+        elif title and len(title) >= 12:
+            query = 'title:"{}"'.format(re.sub(r'["\\]', " ", title)[:200])
+        else:
+            return None
+        headers = (
+            {"Authorization": f"Bearer {self.settings.core_api_key}"}
+            if self.settings.core_api_key
+            else None
+        )
+        # The trailing slash matters: without it CORE answers with a redirect page.
+        result = self.http.get(
+            "https://api.core.ac.uk/v3/search/works/",
+            params={"q": query, "limit": 3},
+            headers=headers,
+        )
+        body = result.json_body() if result.ok else None
+        works = body.get("results") if isinstance(body, dict) else None
+        if not isinstance(works, list):
+            return None
+        for work in works:
+            if not isinstance(work, dict) or not _same_work(work, doi, title):
+                continue
+            name = str(work.get("title") or title or "") or None
+            abstract = " ".join(str(work.get("abstract") or "").split())
+            full = str(work.get("fullText") or "")
+            core_id = work.get("id")
+            url = (
+                f"https://doi.org/{doi}"
+                if doi
+                else (f"https://core.ac.uk/works/{core_id}" if core_id else None)
+            )
+            if len(full) > 1500:
+                return SourceText(name, url, "full text", abstract, full[:_FULL_TEXT_LIMIT], "CORE")
+            if abstract:
+                return SourceText(name, url, "abstract", abstract, "", "CORE")
+        return None
+
     def _semantic_scholar_abstract(self, doi: str) -> str:
         if not self.settings.semantic_scholar_api_key:
             return ""
@@ -336,6 +437,101 @@ class SourceReader:
         return _pdf_text(result.content)
 
 
+def attached_paper(content: bytes, filename: str = "") -> SourceText | None:
+    """A paper the user attached as a PDF, read in full."""
+    if content[:5] != b"%PDF-":
+        return None
+    text = _pdf_text(content, pages=_ATTACHED_PAGES)
+    if not text:
+        return None
+    # The paper's own DOI is printed on its first page; later ones are its references.
+    doi = _DOI.search(text[:1500])
+    name = filename.rsplit("/", 1)[-1].strip() or "your PDF"
+    return SourceText(
+        title=_pdf_title(content) or name.removesuffix(".pdf").removesuffix(".PDF"),
+        url=f"https://doi.org/{doi.group(1).rstrip('.,;)')}" if doi else None,
+        read="full text",
+        abstract=_printed_abstract(text),
+        body=text,
+        via=f"the PDF you attached ({name})",
+    )
+
+
+def _printed_abstract(text: str) -> str:
+    """The abstract printed on a paper's first page, up to the next heading."""
+    head = re.search(r"\babstract\b[\s:.\u2014-]*", text[:6000], re.IGNORECASE)
+    if head is None:
+        return ""
+    chunk = text[head.end() : head.end() + 2500]
+    stop = _ABSTRACT_END.search(chunk, 200)
+    return " ".join((chunk[: stop.start()] if stop else chunk).split())
+
+
+# The attached paper rides along to the next batch of claims in the page
+# itself: a serverless host keeps nothing between requests.
+_PACKED_CHARS = 150_000
+_UNPACKED_BYTES = 1_000_000
+
+
+def pack_paper(paper: SourceText) -> str:
+    fields = {
+        "title": paper.title,
+        "url": paper.url,
+        "abstract": paper.abstract[:3000],
+        "body": paper.body[:_PACKED_CHARS],
+        "via": paper.via,
+    }
+    raw = json.dumps(fields, ensure_ascii=False).encode()
+    return base64.urlsafe_b64encode(zlib.compress(raw, 9)).decode("ascii")
+
+
+def unpack_paper(token: str) -> SourceText | None:
+    if not token:
+        return None
+    try:
+        packed = base64.urlsafe_b64decode(token.encode("ascii"))
+        inflater = zlib.decompressobj()
+        raw = inflater.decompress(packed, _UNPACKED_BYTES)
+        fields = json.loads(raw) if not inflater.unconsumed_tail else None
+    except (binascii.Error, zlib.error, ValueError, UnicodeError):
+        return None
+    if not isinstance(fields, dict) or not isinstance(fields.get("body"), str):
+        return None
+
+    def text(name: str) -> str | None:
+        value = fields.get(name)
+        return value if isinstance(value, str) and value else None
+
+    url = text("url")
+    return SourceText(
+        title=text("title"),
+        url=url if url and url.startswith("https://doi.org/") else None,
+        read="full text",
+        abstract=text("abstract") or "",
+        body=fields["body"],
+        via=text("via") or "the PDF you attached",
+    )
+
+
+def _pdf_title(content: bytes) -> str:
+    try:
+        metadata = PdfReader(io.BytesIO(content)).metadata
+    except (PdfReadError, ValueError, KeyError, TypeError, OSError):
+        return ""
+    title = metadata.title if metadata is not None else None
+    # Word processors often leave "Microsoft Word - draft.docx" or nothing useful.
+    if not isinstance(title, str) or len(title.strip()) < 8 or "microsoft word" in title.lower():
+        return ""
+    return " ".join(title.split())[:160]
+
+
+def _same_work(work: dict[str, object], doi: str | None, title: str | None) -> bool:
+    if doi:
+        return str(work.get("doi") or "").lower() == doi.lower()
+    found = str(work.get("title") or "")
+    return bool(title) and fuzz.token_sort_ratio(_plain(found), _plain(title or "")) >= 90
+
+
 def abstract_from_index(index: object) -> str:
     """OpenAlex stores an abstract as {word: [positions]}; put the words back in order."""
     if not isinstance(index, dict):
@@ -349,13 +545,13 @@ def abstract_from_index(index: object) -> str:
     return " ".join(placed[key] for key in sorted(placed))
 
 
-def _pdf_text(content: bytes) -> str:
+def _pdf_text(content: bytes, *, pages: int = _PDF_PAGES) -> str:
     try:
         reader = PdfReader(io.BytesIO(content))
-        pages = [page.extract_text() or "" for page in reader.pages[:_PDF_PAGES]]
+        texts = [page.extract_text() or "" for page in reader.pages[:pages]]
     except (PdfReadError, ValueError, KeyError, TypeError, OSError):
         return ""
-    text = "\n".join(pages)
+    text = "\n".join(texts)
     # PDF lines break mid-sentence; keep paragraph breaks only.
     text = re.sub(r"-\n(?=[a-z])", "", text)
     text = re.sub(r"(?<![.!?:])\n(?!\n)", " ", text)

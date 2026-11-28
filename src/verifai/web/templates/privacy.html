@@ -7,13 +7,14 @@
   <h2>What is sent</h2>
   <ul>
     <li>The text you paste, or that you ask the extension to check, is sent to the VerifAI server you use. The default server is https://useverifai.vercel.app. You can point the extension at a VerifAI server on your own computer instead.</li>
-    <li>To check that text, the server sends short pieces of it, such as DOIs, titles, links, and search terms, to public sources: Crossref, OpenAlex, DataCite, doi.org, PubMed, Europe PMC, Open Library, Wikipedia, Wikidata, Google News (to find reports from established newsrooms and US government sites), the Federal Register, arXiv, the Wayback Machine, and, when configured, Google Fact Check and Semantic Scholar. When a sentence cites a work, that work's open text or abstract is fetched to be read: from arXiv, Europe PMC, OpenAlex, Crossref, its open-access copy, or the Internet Archive.</li>
+    <li>To check that text, the server sends short pieces of it, such as DOIs, titles, links, and search terms, to public sources: Crossref, OpenAlex, DataCite, doi.org, PubMed, Europe PMC, Open Library, Wikipedia, Wikidata, Google News (to find reports from established newsrooms and US government sites), the Federal Register, arXiv, the Wayback Machine, CORE, and, when configured, Google Fact Check and Semantic Scholar. When a sentence cites a work, that work's open text or abstract is fetched to be read: from arXiv, Europe PMC, OpenAlex, CORE, Crossref, its open-access copy, or the Internet Archive.</li>
+    <li>A PDF you attach is read on the server for that one check. Only its DOI or arXiv ID, if it prints one, is sent out, to OpenAlex, to find its title. The file itself is never sent anywhere or saved.</li>
     <li>To judge whether a source supports a claim, the public site sends the claim and short passages from the sources to an open-weights AI model run by Cloudflare Workers AI. Cloudflare states that it does not use this data to train models. VerifAI running on your own computer judges claims locally and sends nothing to an AI service.</li>
     <li>Your IP address reaches the server, as it does with any website. It is used only to limit how many checks one address can run.</li>
   </ul>
   <h2>What is kept</h2>
   <ul>
-    <li>VerifAI does not store the text you check, does not build profiles, and sets no tracking cookies. There are no ads and no analytics.</li>
+    <li>VerifAI does not store the text you check or the PDFs you attach, does not build profiles, and sets no tracking cookies. There are no ads and no analytics.</li>
     <li>The hosting provider keeps short-lived request logs, as every web host does.</li>
     <li>The extension stores one setting in your browser: the server address you chose. It reads a page only when you ask it to check that page.</li>
   </ul>

@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, Header, HTTPException, Request
+from fastapi import APIRouter, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from verifai.orchestrate import CheckBundle, run_check
 from verifai.sample import EXAMPLE_TEXT
 from verifai.schemas import CheckRequest, CheckResponse, clean_paste, source_label
+from verifai.source_reader import SourceText, attached_paper, pack_paper, unpack_paper
 from verifai.web.throttle import Throttled
 from verifai.web.view import build_view
 
@@ -56,9 +57,19 @@ def build_web_router() -> APIRouter:
         return _render(request, "privacy.html", {})
 
     @router.post("/check", response_class=HTMLResponse)
-    def check_form(request: Request, text: Annotated[str, Form()] = "") -> HTMLResponse:
+    def check_form(
+        request: Request,
+        text: Annotated[str, Form()] = "",
+        paper: Annotated[UploadFile | None, File()] = None,
+    ) -> HTMLResponse:
         partial = request.headers.get("hx-request") == "true"
         error, cleaned = _validate(text, request.app.state.settings.max_text_chars)
+        attached: SourceText | None = None
+        if error is None and paper is not None and paper.filename:
+            error, attached = _read_upload(paper, request.app.state.settings.max_upload_bytes)
+            checker = getattr(request.app.state.router, "source_checker", None)
+            if attached is not None and checker is not None:
+                attached = checker.reader.named(attached)
         context = {
             "results": None,
             "error": error,
@@ -69,10 +80,12 @@ def build_web_router() -> APIRouter:
             "verdict": None,
             "confidence": None,
             "explanation": "",
+            "attached": attached,
+            "paper_token": pack_paper(attached) if attached is not None else "",
         }
         if error is None:
             try:
-                bundle = _run(request, cleaned)
+                bundle = _run(request, cleaned, paper=attached)
                 context["results"] = bundle.results
                 context["combined"] = bundle.combined
                 context["verdict"] = bundle.verdict
@@ -133,6 +146,7 @@ def build_web_router() -> APIRouter:
         offset: Annotated[int, Form(ge=0, le=100_000)] = 0,
         total: Annotated[int, Form(ge=0, le=100_000)] = 0,
         sources: Annotated[str, Form(max_length=20_000)] = "",
+        paper: Annotated[str, Form(max_length=250_000)] = "",
     ) -> HTMLResponse:
         """The next batch of claims from a paste, appended where the last one ended."""
         settings = request.app.state.settings
@@ -146,9 +160,10 @@ def build_web_router() -> APIRouter:
             "cards": [],
             "paused": "",
             "sources": sources,
+            "paper_token": paper,
         }
         try:
-            bundle = _run(request, "\n".join(claims), sources=sources)
+            bundle = _run(request, "\n".join(claims), sources=sources, paper=unpack_paper(paper))
         except Throttled as refused:
             context["paused"] = refused.message
             return _render(request, "more.html", context)
@@ -204,12 +219,37 @@ def build_web_router() -> APIRouter:
     return router
 
 
-def _run(request: Request, text: str, *, sources: str = "") -> CheckBundle:
+def _run(
+    request: Request, text: str, *, sources: str = "", paper: SourceText | None = None
+) -> CheckBundle:
     state = request.app.state
     client = _client_address(request)
     state.rate_limiter.admit(client)
     with state.check_slots.hold():
-        return run_check(state.router, text, limit=state.settings.max_claims, sources=sources)
+        return run_check(
+            state.router, text, limit=state.settings.max_claims, sources=sources, paper=paper
+        )
+
+
+def _read_upload(upload: UploadFile, limit: int) -> tuple[str | None, SourceText | None]:
+    """The attached paper's text, or why it could not be read."""
+    if limit <= 0:
+        return "Attaching a paper is turned off here. Paste the claim and its citation.", None
+    content = upload.file.read(limit + 1)
+    if not content:
+        return None, None
+    if len(content) > limit:
+        return f"That PDF is over {limit / 1_000_000:g} MB. Attach a smaller copy.", None
+    if content[:5] != b"%PDF-":
+        return "Only PDF files can be attached.", None
+    paper = attached_paper(content, upload.filename or "")
+    if paper is None:
+        reason = (
+            "That PDF has no text to read. It may be a scan of printed pages. "
+            "Check it without the file, and its citation will be looked up instead."
+        )
+        return reason, None
+    return None, paper
 
 
 _JUDGE_LOCK = threading.Lock()

@@ -116,7 +116,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
     app.include_router(build_web_router())
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.max_body_bytes,
+        upload_bytes=settings.max_upload_bytes,
+    )
     app.add_middleware(RequestIdMiddleware)
     _install_error_handlers(app)
     configure_logging()

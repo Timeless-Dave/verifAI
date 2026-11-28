@@ -100,13 +100,14 @@
 </article>
 {%- endmacro %}
 
-{% macro continue_block(skipped, offset, total, batch, paused="", sources="") -%}
+{% macro continue_block(skipped, offset, total, batch, paused="", sources="", paper="") -%}
 {% if skipped %}
 <form class="more{% if paused %} more-paused{% endif %}" hx-post="/check/more" hx-trigger="{% if paused %}submit{% else %}load delay:250ms{% endif %}" hx-swap="outerHTML" data-more>
   <input type="hidden" name="text" value="{{ skipped|join('\n') }}">
   <input type="hidden" name="offset" value="{{ offset }}">
   <input type="hidden" name="total" value="{{ total }}">
   {% if sources %}<input type="hidden" name="sources" value="{{ sources }}">{% endif %}
+  {% if paper %}<input type="hidden" name="paper" value="{{ paper }}">{% endif %}
   {% if paused %}
   <span class="more-label" role="status">{{ paused }}</span>
   <button type="submit" class="ghost">Resume checking</button>

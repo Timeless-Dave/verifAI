@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     max_concurrency: int = Field(default=6, ge=1, le=16)
     openalex_api_key: str | None = None
     semantic_scholar_api_key: str | None = None
+    # CORE (core.ac.uk) aggregates open-access papers from university and
+    # subject repositories. Without a key it gives abstracts, rarely; a free
+    # key adds the stored full text and a literature search.
+    core_api_key: str | None = None
     google_factcheck_api_key: str | None = None
     model_backend: Literal[
         "auto", "mlx", "ollama", "llamacpp", "nli", "remote", "hosted", "none"
@@ -49,6 +53,8 @@ class Settings(BaseSettings):
     nli_model: str = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli"
     nli_enabled: bool = True
     max_claims: int = Field(default=8, ge=1, le=20)
+    # A paper attached to a check as a PDF. Vercel refuses bodies over 4.5 MB.
+    max_upload_bytes: int = Field(default=4_000_000, ge=0, le=20_000_000)
     # Public deployments. 0 turns a rate limit off, which suits a local install.
     rate_limit_per_minute: int = Field(default=0, ge=0, le=10_000)
     rate_limit_per_hour: int = Field(default=0, ge=0, le=100_000)

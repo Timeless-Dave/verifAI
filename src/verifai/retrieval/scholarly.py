@@ -4,7 +4,8 @@ OpenAlex indexes about 250 million works across every field, including what
 Google Scholar finds, with open abstracts. arXiv covers preprints in physics,
 mathematics, computer science, and statistics. Semantic Scholar is searched
 too when an API key is set (without one, its shared budget refuses most
-requests). Each paper is its own source; the same paper in two indexes is one.
+requests), and so is CORE, which gathers the open-access papers of university
+and subject repositories, the copies authors also post to ResearchGate. Each paper is its own source; the same paper in two indexes is one.
 """
 
 from __future__ import annotations
@@ -290,4 +291,68 @@ def _s2_passage(paper: object) -> Passage | None:
         document_ids=document_ids(doi=doi, pmid=str(pmid) if pmid else None),
         year=year,
         venue=str(paper.get("venue") or "") or None,
+    )
+
+
+# Figshare and Zenodo deposits, and the DOIs PLOS gives each figure and table.
+_NOT_A_PAPER = re.compile(r"^10\.(?:6084|5281)/|\.[gt]\d{3}$")
+
+
+class CoreSearchRetriever:
+    """CORE's papers whose abstract has every topic word. Needs a free key."""
+
+    name = "core_search"
+
+    def __init__(self, http: PoliteHttp, api_key: str, *, limit: int = 3) -> None:
+        self.http = http
+        self.api_key = api_key
+        self.limit = limit
+
+    def retrieve(self, query: str) -> RetrievalResult:
+        terms = topic_terms(query, limit=6)
+        if len(terms) < 2:
+            return RetrievalResult(self.name)
+        words = " AND ".join(re.sub(r"[^\w-]", "", term) for term in terms)
+        result = self.http.get(
+            "https://api.core.ac.uk/v3/search/works/",
+            # Datasets and figures share the index: ask for more, keep papers.
+            params={"q": f"abstract:({words})", "limit": self.limit * 3},
+            headers={"Authorization": f"Bearer {self.api_key}"},
+        )
+        body = result.json_body() if result.ok else None
+        if not isinstance(body, dict):
+            return RetrievalResult(
+                self.name, unavailable=True, error=result.error or f"HTTP {result.status_code}"
+            )
+        works = body.get("results")
+        if not isinstance(works, list):
+            return RetrievalResult(self.name)
+        passages = [passage for work in works if (passage := _core_passage(work))]
+        return RetrievalResult(self.name, passages=passages[: self.limit])
+
+
+def _core_passage(work: object) -> Passage | None:
+    if not isinstance(work, dict):
+        return None
+    title = " ".join(str(work.get("title") or "").split())
+    abstract = " ".join(str(work.get("abstract") or "").split())
+    doi = str(work.get("doi") or "").strip().lower() or None
+    if not title or len(abstract) < 300 or (doi and _NOT_A_PAPER.search(doi)):
+        return None
+    core_id = work.get("id")
+    year = work.get("yearPublished") if isinstance(work.get("yearPublished"), int) else None
+    journals = work.get("journals")
+    venue = None
+    if isinstance(journals, list) and journals and isinstance(journals[0], dict):
+        venue = journals[0].get("title") if isinstance(journals[0].get("title"), str) else None
+    return Passage(
+        source="core_search",
+        family="core",
+        title=title,
+        url=f"https://doi.org/{doi}" if doi else f"https://core.ac.uk/works/{core_id}",
+        text=f"{title}\n{abstract}"[:3500],
+        document_ids=document_ids(doi=doi) or (f"core:{core_id}",),
+        year=year,
+        venue=venue,
+        publication_type=str(work.get("documentType") or "") or None,
     )

@@ -40,6 +40,8 @@ SOURCE_LABELS = {
     "openalex_search": "OpenAlex",
     "arxiv": "arXiv",
     "semantic_scholar_search": "Semantic Scholar",
+    "core_search": "CORE",
+    "your_file": "Your attached paper",
     "cited_source": "The cited source",
     "major_news": "Major news outlets",
     "us_government": "US government sites",

@@ -72,7 +72,7 @@ class SourceChecker:
             status="unreadable",
             links=search_links(citation.matched_title or citation.raw),
         )
-        if citation.status not in READABLE:
+        if link.document is None and citation.status not in READABLE:
             if citation.status in {CitationStatus.NOT_FOUND, CitationStatus.INVALID}:
                 return base.model_copy(
                     update={
@@ -87,7 +87,7 @@ class SourceChecker:
                     "read against it."
                 }
             )
-        source = self.reader.read(citation)
+        source = link.document or self.reader.read(citation)
         if source is None:
             return base.model_copy(
                 update={
@@ -264,6 +264,10 @@ def search_links(query: str) -> list[PageLink]:
     ]
 
 
+# How a claim's card names a paper the user attached rather than cited.
+ATTACHED = "Your attached PDF"
+
+
 def as_evidence(check: SourceCheck, citation: CitationResult) -> EvidenceItem | None:
     """A cited source that took a side is one independent source, like any other."""
     if check.status not in {"supports", "contradicts"}:
@@ -288,5 +292,5 @@ def as_evidence(check: SourceCheck, citation: CitationResult) -> EvidenceItem | 
         stance=Stance.SUPPORTS.value if check.status == "supports" else Stance.REFUTES.value,
         family=f"cited:{document_ids[0] if document_ids else check.url or citation.raw[:80]}",
         document_ids=document_ids,
-        speaker="The cited source",
+        speaker="Your attached PDF" if check.cited_as == ATTACHED else "The cited source",
     )

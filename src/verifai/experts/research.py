@@ -2,7 +2,7 @@
 
 A sentence from a paper or an essay ("Growth mindset interventions improve
 achievement for lower-achieving students") is searched in OpenAlex and arXiv,
-and in Semantic Scholar when a key is set. Each paper is its own source.
+and in Semantic Scholar and CORE when their keys are set. Each paper is its own source.
 Wikipedia stays as one more, independent source. When the paste cites a work
 for the claim, that work is read too (see ``verifai.source_check``).
 """
@@ -16,6 +16,7 @@ from verifai.http import PoliteHttp
 from verifai.models.judge import Judge
 from verifai.retrieval.scholarly import (
     ArxivSearchRetriever,
+    CoreSearchRetriever,
     OpenAlexSearchRetriever,
     SemanticScholarSearchRetriever,
 )
@@ -28,7 +29,8 @@ class ResearchExpert:
     name = "research"
     description = (
         "Checks a research claim against the scholarly literature: OpenAlex (about 250 "
-        "million works), arXiv, and Semantic Scholar when a key is set, plus Wikipedia. "
+        "million works), arXiv, and Semantic Scholar and CORE when their keys are set, plus "
+        "Wikipedia. "
         "Each paper counts as its own source."
     )
 
@@ -62,4 +64,6 @@ def build_research_expert(http: PoliteHttp, settings: Settings, judge: Judge) ->
         retrievers.insert(
             1, SemanticScholarSearchRetriever(http, settings.semantic_scholar_api_key)
         )
+    if settings.core_api_key:
+        retrievers.insert(-1, CoreSearchRetriever(http, settings.core_api_key))
     return ResearchExpert(retrievers, judge, max_concurrency=settings.max_concurrency)

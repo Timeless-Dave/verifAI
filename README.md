@@ -48,7 +48,7 @@ VerifAI is a tool for reading, not an oracle. It does not replace opening the so
 | a DOI, arXiv ID, or link in the sentence | that work or page |
 | nothing, in a paste with one source | that one source |
 
-The cited work is then read, in this order: its full text from arXiv, PubMed Central (through Europe PMC), an open-access PDF, or an open-access copy; else its abstract from OpenAlex, Europe PMC, Semantic Scholar, or Crossref; or, for a link, the page itself (or the Internet Archive's copy when the site refuses automated readers). A work with no DOI is found by its title. The passages that share the claim's terms are judged, and the card says one of:
+The cited work is then read, in this order: its full text from arXiv, PubMed Central (through Europe PMC), an open-access PDF, or an open-access copy; else its full text or abstract from CORE (open-access papers gathered from university and subject repositories; full text needs a free key), or its abstract from OpenAlex, Europe PMC, Semantic Scholar, or Crossref; or, for a link, the page itself (or the Internet Archive's copy when the site refuses automated readers). A work with no DOI is found by its title. The passages that share the claim's terms are judged, and the card says one of:
 
 | Answer | Meaning |
 | --- | --- |
@@ -60,9 +60,11 @@ The cited work is then read, in this order: its full text from arXiv, PubMed Cen
 
 A sentence about what a source says ("Northey et al. found that …", "According to Vaswani et al., …") is settled by that source: its own text decides it. Any other claim still needs two independent sources, and a cited source that takes a side counts as one of them.
 
-**Searching the literature.** Research claims, and every claim in a paste that carries references, are searched in **OpenAlex** (about 250 million works across every field), **arXiv**, and **Semantic Scholar** (with a free key), beside Wikipedia. Each paper counts as its own source; the same paper found twice counts once. Health claims go to PubMed and Europe PMC.
+**Attaching the paper (optional).** VerifAI finds and reads cited papers on its own, so nothing needs uploading. When a paper is paywalled or not online, a PDF of it (up to 4 MB) can be attached under the paste box. If the paste cites it, the claims that cite it are read against the attached full text; if not, every claim is. The PDF's DOI or arXiv ID names it. A scanned PDF with no text layer is refused with a note. The file is read for that check and never stored.
 
-**Google Scholar and ResearchGate.** Neither offers a public API, and both refuse automated requests (Google Scholar's robots.txt forbids it), so VerifAI cannot read them. OpenAlex and Semantic Scholar index the same literature, with open abstracts. Every citation and every cited source on the page has one-click **Google Scholar** and **ResearchGate** links, so you can look further there yourself.
+**Searching the literature.** Research claims, and every claim in a paste that carries references, are searched in **OpenAlex** (about 250 million works across every field), **arXiv**, **Semantic Scholar** (with a free key), and **CORE** (with a free key), beside Wikipedia. Each paper counts as its own source; the same paper found twice counts once. Health claims go to PubMed and Europe PMC.
+
+**Google Scholar and ResearchGate.** Neither offers a public API, and both refuse automated requests (Google Scholar's robots.txt forbids it), so VerifAI cannot read them. OpenAlex and Semantic Scholar index the same literature, with open abstracts, and CORE holds much of what authors post to ResearchGate, from the repositories of their universities. To check a paper you can only get from ResearchGate, download it and attach the PDF. Every citation and every cited source on the page has one-click **Google Scholar** and **ResearchGate** links, so you can look further there yourself.
 
 **What it sets aside on purpose:**
 
@@ -112,7 +114,7 @@ Confidence is how sure VerifAI is of that verdict, from 0 to 100%. It is not the
    | Checker | Sources | Used for |
    | --- | --- | --- |
    | General | Wikipedia, Wikidata, Google Fact Check, pages linked in the paste | Everyday facts |
-   | Research | OpenAlex, arXiv, Semantic Scholar (with a key), Wikipedia, and the work the sentence cites | Academic and technical claims, and every claim in a paste with references |
+   | Research | OpenAlex, arXiv, Semantic Scholar and CORE (with keys), Wikipedia, and the work the sentence cites or the PDF you attach | Academic and technical claims, and every claim in a paste with references |
    | Health and science | PubMed and Europe PMC (systematic reviews first), Wikipedia, US federal health agencies (FDA, CDC, NIH, HHS), Google Fact Check | Medical and scientific wording. Every result says it is not medical advice |
    | News and politics | Major newsrooms, official US government sites, the Federal Register, Google Fact Check, Wikipedia and its current events, Wikidata, linked articles | Elections, governments, who holds an office now, anything "today" or "this week" |
    | Citation | doi.org, Crossref, OpenAlex, DataCite, PubMed, Open Library, a direct fetch, the Internet Archive | DOIs, links, references, arXiv, PMID, PMC, ISBN |
@@ -267,6 +269,7 @@ Optional keys that add sources:
 - `VERIFAI_GOOGLE_FACTCHECK_API_KEY` turns on Google Fact Check reviews, which are strongest on viral claims and myths. The key is free: in Google Cloud, enable the Fact Check Tools API and create an API key.
 - `VERIFAI_OPENALEX_API_KEY` gives OpenAlex a larger daily budget than the shared free one.
 - `VERIFAI_SEMANTIC_SCHOLAR_API_KEY` adds Semantic Scholar: a third citation index, a literature search for research claims, and abstracts for cited works that OpenAlex lacks. The key is free from Semantic Scholar. Without one it is never called.
+- `VERIFAI_CORE_API_KEY` gives CORE's full text of open-access papers to the reader of cited works, and adds CORE to the literature search. The key is free at core.ac.uk/services/api. Without one, CORE is asked only for an abstract no other source had, and it allows few requests.
 
 ### Try the example
 
@@ -322,6 +325,8 @@ Every setting is an environment variable, or a line in `.env`. `.env.example` li
 | `VERIFAI_GOOGLE_FACTCHECK_API_KEY` | empty | Turns on Google Fact Check. |
 | `VERIFAI_OPENALEX_API_KEY` | empty | Larger OpenAlex budget. |
 | `VERIFAI_SEMANTIC_SCHOLAR_API_KEY` | empty | Turns on Semantic Scholar. |
+| `VERIFAI_CORE_API_KEY` | empty | CORE full text and literature search. |
+| `VERIFAI_MAX_UPLOAD_BYTES` | `4000000` | Largest PDF that can be attached to a check. `0` turns attaching off. |
 | `VERIFAI_MAX_CLAIMS` | `8` | Claims checked per batch. The rest follow in later batches. |
 | `VERIFAI_MAX_TEXT_CHARS` | `50000` | Longest paste accepted. At most 25 citations are looked up per paste. |
 | `VERIFAI_RATE_LIMIT_PER_MINUTE`, `VERIFAI_RATE_LIMIT_PER_HOUR` | `0`, `0` | Checks allowed per visitor address. `0` turns the limit off. Turn both on for a public server. |
@@ -390,9 +395,9 @@ See `CONTRIBUTING.md` before changing how verdicts are reached, and `SECURITY.md
 - **An encyclopedia can lag the news.** Right after a change (a new prime minister), Wikipedia and Wikidata may still say the old thing while newsrooms say the new one, and the claim comes back Mixed until they catch up.
 - **The AI judge can misread a passage.** The two-source rule limits the damage: one misread passage cannot decide a verdict.
 - **Wikipedia search can still pick a side article.** For example, it might pick an article about a disease's history when the claim is about its cause. Opening the article the claim names reduces this but does not remove it.
-- **A cited paper behind a paywall is judged on its abstract.** When the full text is not open, the claim is read against the abstract, and "Doesn't say this" then means "not in the abstract"; the card says so. Old scanned papers with no abstract can't be read at all.
+- **A cited paper behind a paywall is judged on its abstract** unless you attach its PDF. When the full text is not open, the claim is read against the abstract, and "Doesn't say this" then means "not in the abstract"; the card says so. Old scanned papers with no abstract can't be read at all.
 - **Only the passages that share the claim's terms are read.** A claim worded very differently from its source can be missed and come back "Doesn't say this".
-- **Google Scholar and ResearchGate are linked, not read.** They have no public API and refuse automated requests.
+- **Google Scholar and ResearchGate are linked, not read.** They have no public API, refuse automated requests, and forbid it in their terms, so VerifAI does not sign in to them with anyone's account either.
 - **Citation search has blind spots.**
   - Unusual reference styles, references broken across lines in odd ways, and titles with internal abbreviations (`U.S.`) can be missed.
   - A bare `(Smith et al., 2021)` with no title is listed as "nothing to look up". It is not called fake.

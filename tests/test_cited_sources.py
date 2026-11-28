@@ -163,6 +163,9 @@ def _pdf_bytes() -> bytes:
 def test_the_reader_tries_each_open_route() -> None:
     settings = make_settings()
     reader = SourceReader(PoliteHttp(settings), settings)
+    respx.get("https://api.core.ac.uk/v3/search/works/").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
     body = (
         "<html><body>"
         + "<p>The Transformer relies solely on attention.</p>" * 120
